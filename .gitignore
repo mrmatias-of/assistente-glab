@@ -1,0 +1,13 @@
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# PowerShell/editor noise
+*.ps1xml
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+Desktop.ini
