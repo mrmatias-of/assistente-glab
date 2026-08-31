@@ -72,12 +72,12 @@ function Invoke-LoggedProcess {
 
 function Invoke-SafeUiAction {
     param(
-        [Parameter(Mandatory=$true)][scriptblock]$Action,
+        [Parameter(Mandatory=$true)][Alias("Action")][scriptblock]$ActionBlock,
         [string]$Name = "acao"
     )
 
     try {
-        & $Action
+        & $ActionBlock
     } catch {
         Write-Log "Erro ao executar ${Name}: $($_.Exception.Message)"
         if ($_.ScriptStackTrace) {
