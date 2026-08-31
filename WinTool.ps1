@@ -210,7 +210,7 @@ function New-IconBadge {
     $badge = [System.Windows.Controls.Border]::new()
     $badge.Width = $Size
     $badge.Height = $Size
-    $badge.CornerRadius = "7"
+    $badge.CornerRadius = "10"
     $badge.Background = $Accent
     $badge.Margin = "0,0,10,0"
 
@@ -276,12 +276,13 @@ function New-AppCard {
     param([object]$App)
 
     $border = [System.Windows.Controls.Border]::new()
-    $border.Margin = "5"
-    $border.Padding = "10"
-    $border.MinHeight = 72
+    $border.Margin = "7"
+    $border.Padding = "12"
+    $border.Width = 300
+    $border.MinHeight = 86
     $border.BorderBrush = "#CBD5E1"
     $border.BorderThickness = "1"
-    $border.CornerRadius = "6"
+    $border.CornerRadius = "12"
     $border.Background = "#FFFFFF"
 
     $grid = [System.Windows.Controls.Grid]::new()
@@ -325,6 +326,7 @@ function New-AppCard {
     $checkbox = [System.Windows.Controls.CheckBox]::new()
     $checkbox.VerticalAlignment = "Center"
     $checkbox.Margin = "8,0,0,0"
+    $checkbox.ToolTip = "Selecionar $($App.name)"
     $checkbox.Tag = $App
     $checkbox.Add_Checked({ Update-SelectedCount })
     $checkbox.Add_Unchecked({ Update-SelectedCount })
@@ -345,11 +347,13 @@ function New-InfoCard {
     )
 
     $card = [System.Windows.Controls.Border]::new()
-    $card.Margin = "5"
-    $card.Padding = "12"
+    $card.Margin = "7"
+    $card.Padding = "14"
+    $card.Width = 300
+    $card.MinHeight = 122
     $card.BorderBrush = "#CBD5E1"
     $card.BorderThickness = "1"
-    $card.CornerRadius = "6"
+    $card.CornerRadius = "12"
     $card.Background = "#FFFFFF"
 
     $row = [System.Windows.Controls.StackPanel]::new()
@@ -360,6 +364,7 @@ function New-InfoCard {
     $titleBlock = [System.Windows.Controls.TextBlock]::new()
     $titleBlock.Text = $Title
     $titleBlock.FontWeight = "SemiBold"
+    $titleBlock.FontSize = 14
     $titleBlock.Foreground = "#0F172A"
 
     $bodyBlock = [System.Windows.Controls.TextBlock]::new()
@@ -367,12 +372,51 @@ function New-InfoCard {
     $bodyBlock.Foreground = "#475569"
     $bodyBlock.Margin = "0,4,0,0"
     $bodyBlock.TextWrapping = "Wrap"
+    $bodyBlock.FontSize = 12
+    $bodyBlock.MaxWidth = 215
 
     $stack.Children.Add($titleBlock) | Out-Null
     $stack.Children.Add($bodyBlock) | Out-Null
     $row.Children.Add($stack) | Out-Null
     $card.Child = $row
     return $card
+}
+
+function New-SectionHeader {
+    param(
+        [string]$Title,
+        [string]$Subtitle = ""
+    )
+
+    $outer = [System.Windows.Controls.Border]::new()
+    $outer.Width = 940
+    $outer.Margin = "8,18,8,8"
+    $outer.Padding = "12,10"
+    $outer.CornerRadius = "12"
+    $outer.Background = "#E0E7FF"
+    $outer.BorderBrush = "#C7D2FE"
+    $outer.BorderThickness = "1"
+
+    $panel = [System.Windows.Controls.StackPanel]::new()
+
+    $titleBlock = [System.Windows.Controls.TextBlock]::new()
+    $titleBlock.Text = $Title
+    $titleBlock.FontSize = 16
+    $titleBlock.FontWeight = "SemiBold"
+    $titleBlock.Foreground = "#0F172A"
+    $panel.Children.Add($titleBlock) | Out-Null
+
+    if ($Subtitle) {
+        $subtitleBlock = [System.Windows.Controls.TextBlock]::new()
+        $subtitleBlock.Text = $Subtitle
+        $subtitleBlock.FontSize = 12
+        $subtitleBlock.Foreground = "#64748B"
+        $subtitleBlock.Margin = "0,3,0,0"
+        $panel.Children.Add($subtitleBlock) | Out-Null
+    }
+
+    $outer.Child = $panel
+    return $outer
 }
 
 function Get-AllTweaks {
@@ -458,33 +502,29 @@ function Refresh-AppGrid {
     $lastCategory = $null
     foreach ($app in $apps) {
         if ($app.category -ne $lastCategory) {
-            $header = [System.Windows.Controls.TextBlock]::new()
-            $header.Text = "- $($app.category)"
-            $header.FontFamily = "Consolas"
-            $header.FontSize = 15
-            $header.Foreground = "#334155"
-            $header.Margin = "8,14,0,4"
-            $script:AppsPanel.Children.Add($header) | Out-Null
+            $script:AppsPanel.Children.Add((New-SectionHeader -Title $app.category -Subtitle "Aplicativos disponiveis para instalacao, atualizacao ou remocao.")) | Out-Null
             $lastCategory = $app.category
         }
         $script:AppsPanel.Children.Add((New-AppCard -App $app)) | Out-Null
     }
 
     Update-SelectedCount
-    Write-Status "Install" "$($apps.Count) apps visiveis"
+    Write-Status "Instalar" "$($apps.Count) apps visiveis"
 }
 
 function Show-TweaksView {
     $script:ActiveView = "Tweaks"
     Clear-MainPanel
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Tweaks seguros" -Subtitle "Ajustes conservadores carregados de config/tweaks.json. Itens planejados aparecem separados, mas nao sao aplicados.")) | Out-Null
     foreach ($tweak in (Get-AllTweaks | Sort-Object category, name)) {
         $icon = if ($tweak.safe) { "OK" } else { "!" }
         $accent = if ($tweak.safe) { "#16A34A" } else { "#F59E0B" }
-        $body = "$($tweak.description)`nCategoria: $($tweak.category) | Escopo: $($tweak.scope) | Tipo: $($tweak.type)"
+        $state = if ($tweak.safe) { "Seguro" } else { "Planejado" }
+        $body = "$($tweak.description)`n$state | $($tweak.category) | $($tweak.scope)"
         $script:AppsPanel.Children.Add((New-InfoCard -Title $tweak.name -Body $body -Icon $icon -Accent $accent)) | Out-Null
     }
     $safeCount = @((Get-AllTweaks) | Where-Object { $_.safe }).Count
-    Write-Status "Tweaks" "$safeCount tweaks seguros disponiveis"
+    Write-Status "Ajustes" "$safeCount ajustes seguros disponiveis"
 }
 
 function Show-ConfigView {
@@ -495,21 +535,23 @@ function Show-ConfigView {
     $wingetStatus = if ($winget) { "Disponivel: $($winget.Source)" } else { "Nao encontrado no PATH desta sessao." }
     $presetCount = @($script:Presets.PSObject.Properties).Count
     $tweakCount = @((Get-AllTweaks)).Count
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Diagnostico do ambiente" -Subtitle "Leitura local do estado usado pelo Assistente G-LAB antes de executar acoes.")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Catalogo JSON" -Body $script:ConfigPath -Icon "JS" -Accent "#2563EB")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Administrador" -Body $adminStatus -Icon "AD" -Accent "#64748B")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "WinGet" -Body $wingetStatus -Icon "WG" -Accent "#7C3AED")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Presets" -Body "$presetCount presets carregados de $script:PresetsPath" -Icon "PR" -Accent "#0EA5E9")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Tweaks" -Body "$tweakCount tweaks carregados de $script:TweaksPath" -Icon "TW" -Accent "#16A34A")) | Out-Null
-    Write-Status "Config" "Ambiente e configuracoes inspecionados"
+    Write-Status "Configurar" "Ambiente e configuracoes inspecionados"
 }
 
 function Show-UpdatesView {
     $script:ActiveView = "Updates"
     Clear-MainPanel
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Atualizacoes" -Subtitle "Fluxos de update usando WinGet com argumentos validados.")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar selecionados" -Body "Usa o mesmo fluxo validado de pacotes, com source winget/msstore por app." -Icon "UP" -Accent "#2563EB")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar todos" -Body "Executa winget upgrade --all --include-unknown com aceite de acordos e modo silencioso." -Icon "ALL" -Accent "#DC2626")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Registro" -Body "O resultado aparece no console de log abaixo." -Icon "LOG" -Accent "#111827")) | Out-Null
-    Write-Status "Updates" "Acoes de update disponiveis"
+    Write-Status "Atualizar" "Acoes de atualizacao disponiveis"
 }
 
 function Invoke-WingetForSelection {
@@ -571,81 +613,92 @@ function Build-Ui {
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Assistente G-LAB" Height="790" Width="1240" WindowStartupLocation="CenterScreen"
-        Background="#E5E7EB" FontFamily="Segoe UI">
+        Title="Assistente G-LAB" Height="820" Width="1280" WindowStartupLocation="CenterScreen"
+        Background="#EEF2F7" FontFamily="Segoe UI">
     <Window.Resources>
         <Style TargetType="Button">
-            <Setter Property="Background" Value="#F8FAFC"/>
-            <Setter Property="BorderBrush" Value="#94A3B8"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Padding" Value="10,6"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
     </Window.Resources>
-    <Grid Margin="10">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="56"/>
-            <RowDefinition Height="42"/>
+            <RowDefinition Height="82"/>
+            <RowDefinition Height="54"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="155"/>
+            <RowDefinition Height="150"/>
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" LastChildFill="True">
-            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                <Border Width="40" Height="40" CornerRadius="8" Background="#111827" Margin="0,0,10,0">
-                    <TextBlock Text="GL" Foreground="#FFFFFF" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-                <StackPanel>
-                    <TextBlock Text="Assistente G-LAB" FontSize="22" FontWeight="SemiBold" Foreground="#0F172A"/>
-                    <TextBlock Text="Central local de instalacao, ajustes e manutencao Windows" FontSize="12" Foreground="#475569"/>
+        <Border Grid.Row="0" Background="#070B1A" Padding="18,14">
+            <DockPanel LastChildFill="True">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Border Width="48" Height="48" CornerRadius="14" Background="#111827" Margin="0,0,12,0" BorderBrush="#22D3EE" BorderThickness="1">
+                        <TextBlock Text="GL" Foreground="#FFFFFF" FontWeight="Bold" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Assistente G-LAB" FontSize="24" FontWeight="SemiBold" Foreground="#F8FAFC"/>
+                        <TextBlock Text="Central de instalacao, ajustes e manutencao Windows" FontSize="12" Foreground="#93C5FD"/>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
-            <TextBlock x:Name="StatusText" DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="#334155"/>
-        </DockPanel>
+                <Border DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" Background="#0F172A" BorderBrush="#1E40AF" BorderThickness="1" CornerRadius="18" Padding="14,7">
+                    <TextBlock x:Name="StatusText" Foreground="#BFDBFE"/>
+                </Border>
+            </DockPanel>
+        </Border>
 
-        <DockPanel Grid.Row="1" LastChildFill="True">
+        <DockPanel Grid.Row="1" LastChildFill="True" Margin="16,12,16,8">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                <Button x:Name="InstallTab" Content="Install" Width="112" Margin="0,0,6,0"/>
-                <Button x:Name="TweaksTab" Content="Tweaks" Width="112" Margin="0,0,6,0"/>
-                <Button x:Name="ConfigTab" Content="Config" Width="112" Margin="0,0,6,0"/>
-                <Button x:Name="UpdatesTab" Content="Updates" Width="112" Margin="0,0,6,0"/>
+                <Button x:Name="InstallTab" Content="Instalar" Width="118" Margin="0,0,8,0"/>
+                <Button x:Name="TweaksTab" Content="Ajustes" Width="118" Margin="0,0,8,0"/>
+                <Button x:Name="ConfigTab" Content="Configurar" Width="118" Margin="0,0,8,0"/>
+                <Button x:Name="UpdatesTab" Content="Atualizar" Width="118" Margin="0,0,8,0"/>
             </StackPanel>
-            <TextBox x:Name="SearchBox" Height="30" Margin="12,0,0,0" VerticalContentAlignment="Center"/>
+            <TextBox x:Name="SearchBox" Height="36" Margin="12,0,0,0" Padding="12,0" VerticalContentAlignment="Center"
+                     BorderBrush="#CBD5E1" Background="#FFFFFF" Foreground="#0F172A" ToolTip="Buscar por nome, categoria, id ou tag"/>
         </DockPanel>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" Margin="16,0,16,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="235"/>
+                <ColumnDefinition Width="250"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Padding="10" Background="#FFFFFF" BorderBrush="#94A3B8" BorderThickness="1" CornerRadius="6">
+            <Border Grid.Column="0" Padding="14" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="14">
                 <StackPanel>
-                    <TextBlock Text="Actions" FontFamily="Consolas" FontSize="15" Margin="0,0,0,8"/>
-                    <Button x:Name="InstallButton" Content="[+] Install Selected" Margin="0,0,0,5" Height="30"/>
-                    <Button x:Name="UpgradeButton" Content="[^] Upgrade Selected" Margin="0,0,0,5" Height="30"/>
-                    <Button x:Name="UninstallButton" Content="[-] Uninstall Selected" Margin="0,0,0,5" Height="30"/>
-                    <Button x:Name="UpgradeAllButton" Content="[A] Upgrade All Apps" Margin="0,0,0,12" Height="30"/>
-                    <TextBlock Text="Package Manager" FontFamily="Consolas" FontSize="14" Margin="0,0,0,5"/>
+                    <TextBlock Text="Acoes" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,10"/>
+                    <Button x:Name="InstallButton" Content="+ Instalar selecionados" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="UpgradeButton" Content="↑ Atualizar selecionados" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="UninstallButton" Content="− Desinstalar selecionados" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="UpgradeAllButton" Content="Atualizar todos os apps" Margin="0,0,0,16" Height="34"/>
+                    <TextBlock Text="Gerenciador" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <RadioButton Content="WinGet" IsChecked="True" Margin="12,0,0,12"/>
-                    <TextBlock Text="Selection" FontFamily="Consolas" FontSize="14" Margin="0,0,0,5"/>
-                    <Button x:Name="ClearButton" Content="[x] Clear Selection" Margin="0,0,0,5" Height="30"/>
-                    <Button x:Name="ApplyTweaksButton" Content="[*] Apply Safe Tweaks" Margin="0,0,0,5" Height="30"/>
-                    <Button x:Name="ReloadButton" Content="[r] Reload Catalog" Margin="0,0,0,12" Height="30"/>
-                    <TextBlock x:Name="SelectedCountText" Text="Selecionados: 0" Margin="0,8,0,0"/>
-                    <TextBlock x:Name="AdminText" Text="" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="#047857"/>
+                    <TextBlock Text="Selecao e sistema" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
+                    <Button x:Name="ClearButton" Content="Limpar selecao" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="ApplyTweaksButton" Content="Aplicar tweaks seguros" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,14" Height="34"/>
+                    <Border Background="#F1F5F9" CornerRadius="10" Padding="10" Margin="0,4,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="SelectedCountText" Text="Selecionados: 0" FontWeight="SemiBold" Foreground="#0F172A"/>
+                            <TextBlock x:Name="AdminText" Text="" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#047857"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 
             <DockPanel Grid.Column="1" Margin="10,0,0,0">
-                <ComboBox x:Name="CategoryBox" DockPanel.Dock="Top" Height="30" Margin="0,0,0,8"/>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <UniformGrid x:Name="AppsPanel" Columns="3"/>
+                <ComboBox x:Name="CategoryBox" DockPanel.Dock="Top" Height="34" Margin="0,0,0,10" Padding="8,0"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Background="Transparent">
+                    <WrapPanel x:Name="AppsPanel"/>
                 </ScrollViewer>
             </DockPanel>
         </Grid>
 
-        <Border Grid.Row="3" Margin="0,8,0,0" Padding="8" Background="#0F172A" CornerRadius="6">
+        <Border Grid.Row="3" Margin="16,10,16,14" Padding="10" Background="#0B1020" CornerRadius="14">
             <TextBox x:Name="LogBox" Background="#0F172A" Foreground="#E5E7EB" BorderThickness="0"
                      FontFamily="Consolas" FontSize="12" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"/>
