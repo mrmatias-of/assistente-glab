@@ -11,6 +11,7 @@ $script:PresetsPath = Join-Path $script:Root "config\presets.json"
 $script:IconRoot = Join-Path $script:Root "assets\icons"
 $script:ActiveView = "Install"
 $script:SelectedAppIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$script:SelectedTweakNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 if (-not $ValidateOnly -and [System.Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
     powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path
@@ -268,8 +269,11 @@ function Get-SelectedApps {
 
 function Update-SelectedCount {
     if (-not $script:SelectedCountText) { return }
-    $count = $script:SelectedAppIds.Count
-    $script:SelectedCountText.Text = "Selecionados: $count"
+    if ($script:ActiveView -eq "Tweaks") {
+        $script:SelectedCountText.Text = "Ajustes selecionados: $($script:SelectedTweakNames.Count)"
+    } else {
+        $script:SelectedCountText.Text = "Apps selecionados: $($script:SelectedAppIds.Count)"
+    }
 }
 
 function Set-AppSelection {
@@ -345,6 +349,41 @@ function Select-InstalledApps {
         Refresh-AppGrid
         Write-Log "Apps instalados marcados: $($script:SelectedAppIds.Count)."
     }
+}
+
+function Set-TweakSelection {
+    param(
+        [object]$Tweak,
+        [bool]$Selected
+    )
+
+    if (-not $Tweak -or [string]::IsNullOrWhiteSpace($Tweak.name)) { return }
+    if ($Selected) {
+        [void]$script:SelectedTweakNames.Add($Tweak.name)
+    } else {
+        [void]$script:SelectedTweakNames.Remove($Tweak.name)
+    }
+    Update-SelectedCount
+}
+
+function Clear-TweakSelection {
+    $script:SelectedTweakNames.Clear()
+    foreach ($child in $script:AppsPanel.Children) {
+        $checkbox = $child.Tag
+        if ($checkbox -and $checkbox -is [System.Windows.Controls.CheckBox]) {
+            $checkbox.IsChecked = $false
+        }
+    }
+    Update-SelectedCount
+}
+
+function Select-SafeTweaks {
+    Clear-TweakSelection
+    foreach ($tweak in (Get-AllTweaks | Where-Object { $_.safe })) {
+        [void]$script:SelectedTweakNames.Add($tweak.name)
+    }
+    Show-TweaksView
+    Write-Log "Ajustes seguros selecionados: $($script:SelectedTweakNames.Count)."
 }
 
 function New-AppCard {
@@ -456,6 +495,70 @@ function New-InfoCard {
     $row.Children.Add($stack) | Out-Null
     $card.Child = $row
     return $card
+}
+
+function New-TweakCard {
+    param([object]$Tweak)
+
+    $border = [System.Windows.Controls.Border]::new()
+    $border.Margin = "7"
+    $border.Padding = "12"
+    $border.Width = 300
+    $border.MinHeight = 92
+    $border.BorderBrush = "#CBD5E1"
+    $border.BorderThickness = "1"
+    $border.CornerRadius = "12"
+    $border.Background = if ($Tweak.safe) { "#FFFFFF" } else { "#FFF7ED" }
+
+    $grid = [System.Windows.Controls.Grid]::new()
+    $grid.ColumnDefinitions.Add([System.Windows.Controls.ColumnDefinition]::new())
+    $checkColumn = [System.Windows.Controls.ColumnDefinition]::new()
+    $checkColumn.Width = "Auto"
+    $grid.ColumnDefinitions.Add($checkColumn)
+
+    $stack = [System.Windows.Controls.StackPanel]::new()
+
+    $title = [System.Windows.Controls.TextBlock]::new()
+    $title.Text = $Tweak.name
+    $title.FontWeight = "SemiBold"
+    $title.Foreground = "#0F172A"
+    $title.TextWrapping = "Wrap"
+
+    $desc = [System.Windows.Controls.TextBlock]::new()
+    $desc.Text = $Tweak.description
+    $desc.Foreground = "#475569"
+    $desc.Margin = "0,4,0,0"
+    $desc.FontSize = 12
+    $desc.TextWrapping = "Wrap"
+    $desc.MaxWidth = 235
+
+    $meta = [System.Windows.Controls.TextBlock]::new()
+    $meta.Text = if ($Tweak.safe) { "Seguro | $($Tweak.scope)" } else { "Avancado/planejado | $($Tweak.scope)" }
+    $meta.Foreground = if ($Tweak.safe) { "#047857" } else { "#B45309" }
+    $meta.Margin = "0,5,0,0"
+    $meta.FontSize = 11
+
+    $stack.Children.Add($title) | Out-Null
+    $stack.Children.Add($desc) | Out-Null
+    $stack.Children.Add($meta) | Out-Null
+    [System.Windows.Controls.Grid]::SetColumn($stack, 0)
+    $grid.Children.Add($stack) | Out-Null
+
+    $checkbox = [System.Windows.Controls.CheckBox]::new()
+    $checkbox.VerticalAlignment = "Center"
+    $checkbox.Margin = "8,0,0,0"
+    $checkbox.Tag = $Tweak
+    $checkbox.IsEnabled = [bool]$Tweak.safe
+    $checkbox.IsChecked = $script:SelectedTweakNames.Contains($Tweak.name)
+    $checkbox.ToolTip = if ($Tweak.safe) { "Selecionar ajuste" } else { "Item avancado ainda nao habilitado" }
+    $checkbox.Add_Checked({ Set-TweakSelection -Tweak $this.Tag -Selected $true })
+    $checkbox.Add_Unchecked({ Set-TweakSelection -Tweak $this.Tag -Selected $false })
+    [System.Windows.Controls.Grid]::SetColumn($checkbox, 1)
+    $grid.Children.Add($checkbox) | Out-Null
+
+    $border.Child = $grid
+    $border.Tag = $checkbox
+    return $border
 }
 
 function New-SectionHeader {
@@ -591,15 +694,21 @@ function Refresh-AppGrid {
 function Show-TweaksView {
     $script:ActiveView = "Tweaks"
     Clear-MainPanel
-    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Ajustes seguros" -Subtitle "Ajustes conservadores carregados de config/tweaks.json. Itens planejados aparecem separados, mas nao sao aplicados.")) | Out-Null
+    $lastCategory = $null
     foreach ($tweak in (Get-AllTweaks | Sort-Object category, name)) {
-        $icon = if ($tweak.safe) { "OK" } else { "!" }
-        $accent = if ($tweak.safe) { "#16A34A" } else { "#F59E0B" }
-        $state = if ($tweak.safe) { "Seguro" } else { "Planejado" }
-        $body = "$($tweak.description)`n$state | $($tweak.category) | $($tweak.scope)"
-        $script:AppsPanel.Children.Add((New-InfoCard -Title $tweak.name -Body $body -Icon $icon -Accent $accent)) | Out-Null
+        if ($tweak.category -ne $lastCategory) {
+            $subtitle = if ($tweak.category -like "Avancado*") {
+                "Itens visiveis para planejamento; ficam bloqueados ate receberem confirmacao dedicada."
+            } else {
+                "Marque os ajustes que deseja aplicar. Apenas itens seguros podem ser selecionados."
+            }
+            $script:AppsPanel.Children.Add((New-SectionHeader -Title $tweak.category -Subtitle $subtitle)) | Out-Null
+            $lastCategory = $tweak.category
+        }
+        $script:AppsPanel.Children.Add((New-TweakCard -Tweak $tweak)) | Out-Null
     }
     $safeCount = @((Get-AllTweaks) | Where-Object { $_.safe }).Count
+    Update-SelectedCount
     Write-Status "Ajustes" "$safeCount ajustes seguros disponiveis"
 }
 
@@ -671,17 +780,17 @@ function Invoke-UpgradeAll {
 
 function Invoke-SafeTweaks {
     Invoke-SafeUiAction -Name "tweaks seguros" -Action {
-        $safeTweaks = @((Get-AllTweaks) | Where-Object { $_.safe })
-        if ($safeTweaks.Count -eq 0) {
-            Write-Log "Nenhum tweak seguro encontrado."
+        $selectedTweaks = @((Get-AllTweaks) | Where-Object { $_.safe -and $script:SelectedTweakNames.Contains($_.name) })
+        if ($selectedTweaks.Count -eq 0) {
+            Write-Log "Nenhum ajuste seguro selecionado."
             return
         }
 
-        Write-Log "Aplicando $($safeTweaks.Count) tweaks seguros."
-        foreach ($tweak in $safeTweaks) {
+        Write-Log "Aplicando $($selectedTweaks.Count) ajustes selecionados."
+        foreach ($tweak in $selectedTweaks) {
             Invoke-TweakItem -Tweak $tweak
         }
-        Write-Log "Tweaks seguros finalizados."
+        Write-Log "Ajustes selecionados finalizados."
     }
 }
 
@@ -759,7 +868,8 @@ function Build-Ui {
                     <TextBlock Text="Selecao e sistema" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <Button x:Name="ClearButton" Content="Limpar selecao" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="InstalledButton" Content="Marcar instalados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="ApplyTweaksButton" Content="Aplicar tweaks seguros" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="SelectTweaksButton" Content="Selecionar ajustes seguros" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="ApplyTweaksButton" Content="Aplicar ajustes marcados" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,14" Height="34"/>
                     <Border Background="#F1F5F9" CornerRadius="10" Padding="10" Margin="0,4,0,0">
                         <StackPanel>
@@ -840,6 +950,7 @@ $window.FindName("ApplyPresetButton").Add_Click({
     }
 })
 $window.FindName("InstalledButton").Add_Click({ Select-InstalledApps })
+$window.FindName("SelectTweaksButton").Add_Click({ Select-SafeTweaks })
 $window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Aplicar ajustes seguros" -Action { Invoke-SafeTweaks } })
 $window.FindName("ReloadButton").Add_Click({
     $script:Catalog = Load-AppCatalog
@@ -858,7 +969,11 @@ $window.FindName("ReloadButton").Add_Click({
     }
 })
 $window.FindName("ClearButton").Add_Click({
-    Clear-AppSelection
+    if ($script:ActiveView -eq "Tweaks") {
+        Clear-TweakSelection
+    } else {
+        Clear-AppSelection
+    }
 })
 
 $window.FindName("InstallTab").Add_Click({ Refresh-AppGrid })
