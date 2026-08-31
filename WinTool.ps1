@@ -358,9 +358,17 @@ function Invoke-WingetForSelection {
 
         foreach ($app in $apps) {
             Write-Log "${Action}: $($app.name)"
-            $args = @($Action, "--id", $app.id, "--exact", "--accept-package-agreements", "--accept-source-agreements")
-            if ($Action -eq "install" -or $Action -eq "upgrade") {
-                $args += "--silent"
+            $args = @($Action, "--id", $app.id, "--exact")
+            switch ($Action) {
+                "install" {
+                    $args += @("--accept-package-agreements", "--accept-source-agreements", "--silent")
+                }
+                "upgrade" {
+                    $args += @("--accept-package-agreements", "--accept-source-agreements", "--silent")
+                }
+                "uninstall" {
+                    $args += @("--accept-source-agreements", "--silent")
+                }
             }
             Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments $args | Out-Null
         }
