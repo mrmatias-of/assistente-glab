@@ -21,7 +21,7 @@ powershell -ExecutionPolicy Bypass -File .\Start-Assistente-GLAB.ps1
 Quando voce hospedar o conteudo em um servidor HTTPS, o endpoint deve devolver um script pequeno de bootstrap que baixe/execute a versao principal. O modelo seria:
 
 ```powershell
-irm https://seu-dominio.com/wintool | iex
+irm https://raw.githubusercontent.com/mrmatias-of/assistente-glab/main/web-bootstrap-template.ps1 | iex
 ```
 
 Para producao, assine os scripts, use HTTPS, publique hashes das versoes e mantenha acoes sensiveis separadas da inicializacao.
