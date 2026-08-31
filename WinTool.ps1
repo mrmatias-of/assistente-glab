@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:ConfigPath = Join-Path $script:Root "config\apps.json"
+$script:TweaksPath = Join-Path $script:Root "config\tweaks.json"
+$script:PresetsPath = Join-Path $script:Root "config\presets.json"
 $script:IconRoot = Join-Path $script:Root "assets\icons"
 $script:ActiveView = "Install"
 
@@ -25,11 +27,28 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Load-AppCatalog {
-    if (-not (Test-Path -LiteralPath $script:ConfigPath)) {
-        throw "Catalogo nao encontrado: $script:ConfigPath"
+function Load-JsonFile {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Name
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "$Name nao encontrado: $Path"
     }
-    return Get-Content -LiteralPath $script:ConfigPath -Raw | ConvertFrom-Json
+    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+}
+
+function Load-AppCatalog {
+    return Load-JsonFile -Path $script:ConfigPath -Name "Catalogo de apps"
+}
+
+function Load-TweakCatalog {
+    return Load-JsonFile -Path $script:TweaksPath -Name "Catalogo de tweaks"
+}
+
+function Load-PresetCatalog {
+    return Load-JsonFile -Path $script:PresetsPath -Name "Catalogo de presets"
 }
 
 function Write-Log {
@@ -74,6 +93,95 @@ function Invoke-LoggedProcess {
     if ($stderr -and $stderr.Trim()) { Write-Log $stderr.Trim() }
     Write-Log "Exit code: $($process.ExitCode)"
     return $process.ExitCode
+}
+
+function Get-WingetPackageArguments {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("install", "uninstall", "upgrade")]
+        [string]$Action,
+
+        [Parameter(Mandatory=$true)]
+        [string]$PackageId
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PackageId) -or $PackageId -eq "na") {
+        return @()
+    }
+
+    $source = "winget"
+    $id = $PackageId
+    if ($id.StartsWith("msstore:", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $source = "msstore"
+        $id = $id.Substring("msstore:".Length)
+    }
+
+    switch ($Action) {
+        "install" {
+            return @("install", "--id", $id, "--exact", "--source", $source, "--accept-package-agreements", "--accept-source-agreements", "--silent")
+        }
+        "upgrade" {
+            return @("upgrade", "--id", $id, "--exact", "--source", $source, "--accept-package-agreements", "--accept-source-agreements", "--silent")
+        }
+        "uninstall" {
+            return @("uninstall", "--id", $id, "--exact", "--source", $source, "--silent")
+        }
+    }
+}
+
+function Get-WingetUpgradeAllArguments {
+    return @("upgrade", "--all", "--include-unknown", "--accept-package-agreements", "--accept-source-agreements", "--silent")
+}
+
+function Test-AssistenteConfig {
+    $ids = @{}
+    foreach ($app in $script:Catalog) {
+        if ([string]::IsNullOrWhiteSpace($app.name)) {
+            throw "Existe app sem nome no catalogo."
+        }
+        if ([string]::IsNullOrWhiteSpace($app.id)) {
+            throw "App sem id no catalogo: $($app.name)"
+        }
+        if ($ids.ContainsKey($app.id)) {
+            throw "ID duplicado no catalogo: $($app.id)"
+        }
+        $ids[$app.id] = $true
+
+        foreach ($actionName in @("install", "upgrade", "uninstall")) {
+            $arguments = Get-WingetPackageArguments -Action $actionName -PackageId $app.id
+            if ($arguments.Count -eq 0) {
+                throw "Argumentos winget vazios para $($app.name) em $actionName."
+            }
+            if ($actionName -eq "uninstall" -and $arguments -contains "--accept-package-agreements") {
+                throw "Argumento invalido no uninstall para $($app.name): --accept-package-agreements"
+            }
+            if (($app.id -like "msstore:*") -and -not ($arguments -contains "msstore")) {
+                throw "App Microsoft Store sem source msstore: $($app.name)"
+            }
+        }
+    }
+
+    foreach ($preset in $script:Presets.PSObject.Properties) {
+        foreach ($appId in @($preset.Value.apps)) {
+            if (-not $ids.ContainsKey($appId)) {
+                throw "Preset $($preset.Name) referencia app inexistente: $appId"
+            }
+        }
+    }
+
+    foreach ($tweak in (Get-AllTweaks)) {
+        if ([string]::IsNullOrWhiteSpace($tweak.name)) {
+            throw "Existe tweak sem nome no catalogo."
+        }
+        if ([string]::IsNullOrWhiteSpace($tweak.type)) {
+            throw "Tweak sem tipo: $($tweak.name)"
+        }
+        if ($tweak.safe -and $tweak.type -eq "registry") {
+            if ([string]::IsNullOrWhiteSpace($tweak.path) -or [string]::IsNullOrWhiteSpace($tweak.property)) {
+                throw "Tweak de registro incompleto: $($tweak.name)"
+            }
+        }
+    }
 }
 
 function Invoke-SafeUiAction {
@@ -267,6 +375,61 @@ function New-InfoCard {
     return $card
 }
 
+function Get-AllTweaks {
+    $items = @()
+    foreach ($category in $script:Tweaks.PSObject.Properties) {
+        foreach ($tweak in @($category.Value)) {
+            $items += [pscustomobject]@{
+                category = $category.Name
+                name = $tweak.name
+                description = $tweak.description
+                scope = $tweak.scope
+                safe = [bool]$tweak.safe
+                type = $tweak.type
+                path = $tweak.path
+                property = $tweak.property
+                value = $tweak.value
+                valueKind = $tweak.valueKind
+            }
+        }
+    }
+    return $items
+}
+
+function Set-RegistryTweak {
+    param([Parameter(Mandatory=$true)][psobject]$Tweak)
+
+    if ([string]::IsNullOrWhiteSpace($Tweak.path) -or [string]::IsNullOrWhiteSpace($Tweak.property)) {
+        throw "Tweak de registro incompleto: $($Tweak.name)"
+    }
+
+    if (-not (Test-Path -LiteralPath $Tweak.path)) {
+        New-Item -Path $Tweak.path -Force | Out-Null
+    }
+
+    $propertyType = if ([string]::IsNullOrWhiteSpace($Tweak.valueKind)) { "DWord" } else { $Tweak.valueKind }
+    New-ItemProperty -Path $Tweak.path -Name $Tweak.property -Value $Tweak.value -PropertyType $propertyType -Force | Out-Null
+}
+
+function Invoke-TweakItem {
+    param([Parameter(Mandatory=$true)][psobject]$Tweak)
+
+    if (-not $Tweak.safe) {
+        Write-Log "Tweak ignorado por nao estar marcado como seguro: $($Tweak.name)"
+        return
+    }
+
+    switch ($Tweak.type) {
+        "registry" {
+            Set-RegistryTweak -Tweak $Tweak
+            Write-Log "Tweak aplicado: $($Tweak.name)"
+        }
+        default {
+            Write-Log "Tweak ainda nao implementado: $($Tweak.name)"
+        }
+    }
+}
+
 function Clear-MainPanel {
     $script:AppsPanel.Children.Clear()
 }
@@ -314,28 +477,37 @@ function Refresh-AppGrid {
 function Show-TweaksView {
     $script:ActiveView = "Tweaks"
     Clear-MainPanel
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Explorer limpo" -Body "Mostra extensoes de arquivo e arquivos ocultos para o usuario atual." -Icon "EX" -Accent "#0EA5E9")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Privacidade basica" -Body "Espaco reservado para telemetria, apps em segundo plano e sugestoes do Windows." -Icon "PR" -Accent "#16A34A")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Performance" -Body "Espaco reservado para ajustes de inicializacao, energia e efeitos visuais." -Icon "PF" -Accent "#F59E0B")) | Out-Null
-    Write-Status "Tweaks" "Tweaks seguros prontos"
+    foreach ($tweak in (Get-AllTweaks | Sort-Object category, name)) {
+        $icon = if ($tweak.safe) { "OK" } else { "!" }
+        $accent = if ($tweak.safe) { "#16A34A" } else { "#F59E0B" }
+        $body = "$($tweak.description)`nCategoria: $($tweak.category) | Escopo: $($tweak.scope) | Tipo: $($tweak.type)"
+        $script:AppsPanel.Children.Add((New-InfoCard -Title $tweak.name -Body $body -Icon $icon -Accent $accent)) | Out-Null
+    }
+    $safeCount = @((Get-AllTweaks) | Where-Object { $_.safe }).Count
+    Write-Status "Tweaks" "$safeCount tweaks seguros disponiveis"
 }
 
 function Show-ConfigView {
     $script:ActiveView = "Config"
     Clear-MainPanel
     $adminStatus = if (Test-IsAdmin) { "Executando elevado." } else { "Nao elevado; algumas acoes podem pedir permissao." }
-    $wingetStatus = if (Get-Command winget -ErrorAction SilentlyContinue) { "Disponivel no PATH." } else { "Nao encontrado no PATH desta sessao." }
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    $wingetStatus = if ($winget) { "Disponivel: $($winget.Source)" } else { "Nao encontrado no PATH desta sessao." }
+    $presetCount = @($script:Presets.PSObject.Properties).Count
+    $tweakCount = @((Get-AllTweaks)).Count
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Catalogo JSON" -Body $script:ConfigPath -Icon "JS" -Accent "#2563EB")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Administrador" -Body $adminStatus -Icon "AD" -Accent "#64748B")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "WinGet" -Body $wingetStatus -Icon "WG" -Accent "#7C3AED")) | Out-Null
-    Write-Status "Config" "Ambiente inspecionado"
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Presets" -Body "$presetCount presets carregados de $script:PresetsPath" -Icon "PR" -Accent "#0EA5E9")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Tweaks" -Body "$tweakCount tweaks carregados de $script:TweaksPath" -Icon "TW" -Accent "#16A34A")) | Out-Null
+    Write-Status "Config" "Ambiente e configuracoes inspecionados"
 }
 
 function Show-UpdatesView {
     $script:ActiveView = "Updates"
     Clear-MainPanel
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar selecionados" -Body "Selecione apps na aba Install e use Upgrade Selected." -Icon "UP" -Accent "#2563EB")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar todos" -Body "Executa winget upgrade --all com aceite de acordos." -Icon "ALL" -Accent "#DC2626")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar selecionados" -Body "Usa o mesmo fluxo validado de pacotes, com source winget/msstore por app." -Icon "UP" -Accent "#2563EB")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar todos" -Body "Executa winget upgrade --all --include-unknown com aceite de acordos e modo silencioso." -Icon "ALL" -Accent "#DC2626")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Registro" -Body "O resultado aparece no console de log abaixo." -Icon "LOG" -Accent "#111827")) | Out-Null
     Write-Status "Updates" "Acoes de update disponiveis"
 }
@@ -358,17 +530,10 @@ function Invoke-WingetForSelection {
 
         foreach ($app in $apps) {
             Write-Log "${Action}: $($app.name)"
-            $args = @($Action, "--id", $app.id, "--exact")
-            switch ($Action) {
-                "install" {
-                    $args += @("--accept-package-agreements", "--accept-source-agreements", "--silent")
-                }
-                "upgrade" {
-                    $args += @("--accept-package-agreements", "--accept-source-agreements", "--silent")
-                }
-                "uninstall" {
-                    $args += @("--accept-source-agreements", "--silent")
-                }
+            $args = Get-WingetPackageArguments -Action $Action -PackageId $app.id
+            if ($args.Count -eq 0) {
+                Write-Log "Pacote ignorado: id vazio ou nao suportado para $($app.name)."
+                continue
             }
             Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments $args | Out-Null
         }
@@ -382,16 +547,23 @@ function Invoke-UpgradeAll {
             Write-Log "WinGet nao foi encontrado neste sistema."
             return
         }
-        Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments @("upgrade", "--all", "--accept-package-agreements", "--accept-source-agreements") | Out-Null
+        Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments (Get-WingetUpgradeAllArguments) | Out-Null
     }
 }
 
 function Invoke-SafeTweaks {
     Invoke-SafeUiAction -Name "tweaks seguros" -Action {
-        Write-Log "Aplicando tweaks seguros de interface."
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "HideFileExt" -Value 0
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Hidden" -Value 1
-        Write-Log "Extensoes e arquivos ocultos agora ficam visiveis para o usuario atual."
+        $safeTweaks = @((Get-AllTweaks) | Where-Object { $_.safe })
+        if ($safeTweaks.Count -eq 0) {
+            Write-Log "Nenhum tweak seguro encontrado."
+            return
+        }
+
+        Write-Log "Aplicando $($safeTweaks.Count) tweaks seguros."
+        foreach ($tweak in $safeTweaks) {
+            Invoke-TweakItem -Tweak $tweak
+        }
+        Write-Log "Tweaks seguros finalizados."
     }
 }
 
@@ -487,6 +659,9 @@ function Build-Ui {
 }
 
 $script:Catalog = Load-AppCatalog
+$script:Tweaks = Load-TweakCatalog
+$script:Presets = Load-PresetCatalog
+$script:ValidationRan = $false
 $window = Build-Ui
 if (-not $window) {
     throw "Nao foi possivel carregar a janela WPF do Assistente G-LAB."
@@ -515,8 +690,19 @@ $window.FindName("UpgradeAllButton").Add_Click({ Invoke-SafeUiAction -Name "Upgr
 $window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Apply Safe Tweaks" -Action { Invoke-SafeTweaks } })
 $window.FindName("ReloadButton").Add_Click({
     $script:Catalog = Load-AppCatalog
-    Write-Log "Catalogo recarregado: $($script:Catalog.Count) apps."
-    Refresh-AppGrid
+    $script:Tweaks = Load-TweakCatalog
+    $script:Presets = Load-PresetCatalog
+    Test-AssistenteConfig
+    Write-Log "Configuracoes recarregadas: $($script:Catalog.Count) apps, $(@((Get-AllTweaks)).Count) tweaks, $(@($script:Presets.PSObject.Properties).Count) presets."
+    if ($script:ActiveView -eq "Tweaks") {
+        Show-TweaksView
+    } elseif ($script:ActiveView -eq "Config") {
+        Show-ConfigView
+    } elseif ($script:ActiveView -eq "Updates") {
+        Show-UpdatesView
+    } else {
+        Refresh-AppGrid
+    }
 })
 $window.FindName("ClearButton").Add_Click({
     foreach ($child in $script:AppsPanel.Children) {
@@ -542,7 +728,9 @@ if (Test-IsAdmin) {
 Write-Log "Assistente G-LAB iniciado. Catalogo carregado: $($script:Catalog.Count) apps."
 Refresh-AppGrid
 if ($ValidateOnly) {
-    "ValidateOnly OK: $($script:Catalog.Count) apps carregados."
+    Test-AssistenteConfig
+    $script:ValidationRan = $true
+    "ValidateOnly OK: $($script:Catalog.Count) apps, $(@((Get-AllTweaks)).Count) tweaks e $(@($script:Presets.PSObject.Properties).Count) presets carregados."
     return
 }
 if (-not $window) {

@@ -4,13 +4,47 @@
       "name": "ShowFileExtensions",
       "description": "Mostra extensoes de arquivos no Explorer.",
       "scope": "HKCU",
-      "safe": true
+      "safe": true,
+      "type": "registry",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "property": "HideFileExt",
+      "value": 0,
+      "valueKind": "DWord"
     },
     {
       "name": "ShowHiddenFiles",
       "description": "Mostra arquivos ocultos no Explorer.",
       "scope": "HKCU",
-      "safe": true
+      "safe": true,
+      "type": "registry",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "property": "Hidden",
+      "value": 1,
+      "valueKind": "DWord"
+    },
+    {
+      "name": "LaunchToThisPC",
+      "description": "Abre o Explorer em Este Computador.",
+      "scope": "HKCU",
+      "safe": true,
+      "type": "registry",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "property": "LaunchTo",
+      "value": 1,
+      "valueKind": "DWord"
+    }
+  ],
+  "Privacy": [
+    {
+      "name": "DisableAdvertisingId",
+      "description": "Desativa o ID de publicidade do Windows para o usuario atual.",
+      "scope": "HKCU",
+      "safe": true,
+      "type": "registry",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
+      "property": "Enabled",
+      "value": 0,
+      "valueKind": "DWord"
     }
   ],
   "Planned": [
@@ -18,7 +52,8 @@
       "name": "RestorePoint",
       "description": "Criar ponto de restauracao antes de tweaks sensiveis.",
       "scope": "System",
-      "safe": true
+      "safe": false,
+      "type": "planned"
     }
   ]
 }
