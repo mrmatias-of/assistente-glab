@@ -60,8 +60,18 @@ powershell -ExecutionPolicy Bypass -File .\WinTool.ps1 -ValidateOnly
 ├── web-bootstrap-template.ps1
 ├── config
 │   └── apps.json
+│   └── presets.json
+│   └── tweaks.json
 ├── assets
 │   └── icons
+├── docs
+│   └── ARCHITECTURE.md
+├── functions
+│   ├── private
+│   └── public
+├── pester
+├── scripts
+├── xaml
 └── src
     └── New-IconAssets.ps1
 ```
@@ -146,6 +156,12 @@ Depois de alterar o projeto, valide:
 powershell -ExecutionPolicy Bypass -File .\WinTool.ps1 -ValidateOnly
 ```
 
+Para gerar uma versao compilada em `dist/`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Compile.ps1
+```
+
 Depois registre as mudancas:
 
 ```powershell
@@ -163,6 +179,8 @@ git push
 - Adicionar backup/restore de configuracoes.
 - Criar pontos de restauracao antes de tweaks sensiveis.
 - Separar modulos em `functions`, `scripts` e `config`.
+- Mover a interface para `xaml/inputXML.xaml`.
+- Adicionar testes Pester para catalogo, bootstrap e renderizacao.
 - Publicar releases versionadas.
 - Adicionar assinatura de script.
 

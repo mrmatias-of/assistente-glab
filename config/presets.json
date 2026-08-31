@@ -1,0 +1,45 @@
+{
+  "Standard": {
+    "description": "Apps essenciais para uma maquina Windows comum.",
+    "apps": [
+      "7zip.7zip",
+      "Google.Chrome",
+      "Notepad++.Notepad++",
+      "Microsoft.PowerToys",
+      "VideoLAN.VLC"
+    ]
+  },
+  "Dev": {
+    "description": "Ferramentas para desenvolvimento.",
+    "apps": [
+      "Git.Git",
+      "Microsoft.VisualStudioCode",
+      "OpenJS.NodeJS.LTS",
+      "Python.Python.3.12",
+      "Docker.DockerDesktop",
+      "Microsoft.WindowsTerminal"
+    ]
+  },
+  "Tecnico": {
+    "description": "Ferramentas para manutencao e suporte.",
+    "apps": [
+      "7zip.7zip",
+      "voidtools.Everything",
+      "Rufus.Rufus",
+      "Ventoy.Ventoy",
+      "CPUID.CPU-Z",
+      "REALiX.HWiNFO",
+      "WinSCP.WinSCP"
+    ]
+  },
+  "Gamer": {
+    "description": "Base para maquinas de jogos e streaming.",
+    "apps": [
+      "Discord.Discord",
+      "Valve.Steam",
+      "EpicGames.EpicGamesLauncher",
+      "OBSProject.OBSStudio",
+      "VideoLAN.VLC"
+    ]
+  }
+}

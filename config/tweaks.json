@@ -1,0 +1,24 @@
+{
+  "Explorer": [
+    {
+      "name": "ShowFileExtensions",
+      "description": "Mostra extensoes de arquivos no Explorer.",
+      "scope": "HKCU",
+      "safe": true
+    },
+    {
+      "name": "ShowHiddenFiles",
+      "description": "Mostra arquivos ocultos no Explorer.",
+      "scope": "HKCU",
+      "safe": true
+    }
+  ],
+  "Planned": [
+    {
+      "name": "RestorePoint",
+      "description": "Criar ponto de restauracao antes de tweaks sensiveis.",
+      "scope": "System",
+      "safe": true
+    }
+  ]
+}

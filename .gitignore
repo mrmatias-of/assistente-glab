@@ -2,6 +2,7 @@
 *.log
 *.tmp
 *.bak
+dist/
 
 # PowerShell/editor noise
 *.ps1xml
