@@ -12,6 +12,26 @@ $script:IconRoot = Join-Path $script:Root "assets\icons"
 $script:ActiveView = "Install"
 $script:SelectedAppIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $script:SelectedTweakNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$script:SelectedAppxNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$script:DnsPresets = @(
+    [pscustomobject]@{ Name = "Padrao do provedor"; Primary = ""; Secondary = ""; Description = "Volta para DNS automatico por DHCP." },
+    [pscustomobject]@{ Name = "Cloudflare"; Primary = "1.1.1.1"; Secondary = "1.0.0.1"; Description = "DNS rapido com foco em privacidade." },
+    [pscustomobject]@{ Name = "Google"; Primary = "8.8.8.8"; Secondary = "8.8.4.4"; Description = "DNS publico do Google." },
+    [pscustomobject]@{ Name = "Quad9"; Primary = "9.9.9.9"; Secondary = "149.112.112.112"; Description = "DNS com bloqueio de dominios maliciosos." },
+    [pscustomobject]@{ Name = "AdGuard"; Primary = "94.140.14.14"; Secondary = "94.140.15.15"; Description = "DNS com bloqueio de anuncios e rastreadores." }
+)
+$script:AppxCatalog = @(
+    [pscustomobject]@{ Name = "Clipchamp"; Package = "Clipchamp.Clipchamp"; Safe = $true },
+    [pscustomobject]@{ Name = "Microsoft News"; Package = "Microsoft.BingNews"; Safe = $true },
+    [pscustomobject]@{ Name = "Microsoft Weather"; Package = "Microsoft.BingWeather"; Safe = $true },
+    [pscustomobject]@{ Name = "Xbox App"; Package = "Microsoft.GamingApp"; Safe = $true },
+    [pscustomobject]@{ Name = "Xbox Game Bar"; Package = "Microsoft.XboxGamingOverlay"; Safe = $true },
+    [pscustomobject]@{ Name = "Solitaire Collection"; Package = "Microsoft.MicrosoftSolitaireCollection"; Safe = $true },
+    [pscustomobject]@{ Name = "Teams pessoal"; Package = "MicrosoftTeams"; Safe = $true },
+    [pscustomobject]@{ Name = "OneNote"; Package = "Microsoft.Office.OneNote"; Safe = $false },
+    [pscustomobject]@{ Name = "Fotos"; Package = "Microsoft.Windows.Photos"; Safe = $false },
+    [pscustomobject]@{ Name = "Calculadora"; Package = "Microsoft.WindowsCalculator"; Safe = $false }
+)
 
 if (-not $ValidateOnly -and [System.Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
     powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path
@@ -271,6 +291,8 @@ function Update-SelectedCount {
     if (-not $script:SelectedCountText) { return }
     if ($script:ActiveView -eq "Tweaks") {
         $script:SelectedCountText.Text = "Ajustes selecionados: $($script:SelectedTweakNames.Count)"
+    } elseif ($script:ActiveView -eq "Appx") {
+        $script:SelectedCountText.Text = "AppX selecionados: $($script:SelectedAppxNames.Count)"
     } else {
         $script:SelectedCountText.Text = "Apps selecionados: $($script:SelectedAppIds.Count)"
     }
@@ -753,6 +775,40 @@ function Show-UpdatesView {
     Write-Status "Atualizar" "Acoes de atualizacao disponiveis"
 }
 
+function Show-AppxView {
+    $script:ActiveView = "Appx"
+    Clear-MainPanel
+    $panel = [System.Windows.Controls.StackPanel]::new()
+    $panel.Width = 930
+    $panel.Margin = "6"
+    $panel.Children.Add((New-SectionHeader -Title "Remocao de AppX" -Subtitle "Marque apps provisionados seguros para remocao. Itens sensiveis ficam bloqueados.")) | Out-Null
+    foreach ($appx in $script:AppxCatalog) {
+        $checkbox = [System.Windows.Controls.CheckBox]::new()
+        $checkbox.Content = if ($appx.Safe) { "$($appx.Name) ($($appx.Package))" } else { "$($appx.Name) - sensivel/bloqueado" }
+        $checkbox.Margin = "8,2,0,2"
+        $checkbox.FontSize = 12
+        $checkbox.Tag = $appx
+        $checkbox.IsEnabled = [bool]$appx.Safe
+        $checkbox.IsChecked = $script:SelectedAppxNames.Contains($appx.Package)
+        $checkbox.Add_Checked({ Set-AppxSelection -Appx $this.Tag -Selected $true })
+        $checkbox.Add_Unchecked({ Set-AppxSelection -Appx $this.Tag -Selected $false })
+        $panel.Children.Add($checkbox) | Out-Null
+    }
+    $script:AppsPanel.Children.Add($panel) | Out-Null
+    Update-SelectedCount
+    Write-Status "AppX" "$(@($script:AppxCatalog | Where-Object Safe).Count) remocoes seguras disponiveis"
+}
+
+function Show-Win11View {
+    $script:ActiveView = "Win11"
+    Clear-MainPanel
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Windows 11 Creator" -Subtitle "Area para preparar ISO/USB do Windows 11. Por seguranca, a primeira versao abre a fonte oficial.")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Baixar Windows 11" -Body "Abre a pagina oficial da Microsoft para ISO, assistente de instalacao e media creation tool." -Icon "11" -Accent "#2563EB")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "AutoUnattend" -Body "Planejado: gerar arquivo de instalacao automatizada em etapa dedicada." -Icon "AU" -Accent "#7C3AED")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Drivers e debloat offline" -Body "Planejado: inserir drivers e aplicar ajustes em imagem offline." -Icon "ISO" -Accent "#0F766E")) | Out-Null
+    Write-Status "Windows 11" "Criador preparado"
+}
+
 function Invoke-WingetForSelection {
     param([ValidateSet("install", "uninstall", "upgrade")][string]$Action)
 
@@ -808,6 +864,82 @@ function Invoke-SafeTweaks {
     }
 }
 
+function Set-GLabDns {
+    param([Parameter(Mandatory=$true)][psobject]$Preset)
+    Invoke-SafeUiAction -Name "Configurar DNS" -Action {
+        $adapters = @(Get-NetAdapter | Where-Object { $_.Status -eq "Up" })
+        if ($adapters.Count -eq 0) { Write-Log "Nenhum adaptador de rede ativo encontrado."; return }
+        foreach ($adapter in $adapters) {
+            if ([string]::IsNullOrWhiteSpace($Preset.Primary)) {
+                Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses
+                Write-Log "DNS automatico restaurado em $($adapter.Name)."
+            } else {
+                Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses @($Preset.Primary, $Preset.Secondary)
+                Write-Log "DNS $($Preset.Name) aplicado em $($adapter.Name): $($Preset.Primary), $($Preset.Secondary)."
+            }
+        }
+    }
+}
+
+function Invoke-SystemRepair {
+    Invoke-SafeUiAction -Name "Reparo do sistema" -Action {
+        Write-Log "Iniciando DISM /RestoreHealth."
+        Invoke-LoggedProcess -FilePath "dism.exe" -Arguments @("/Online", "/Cleanup-Image", "/RestoreHealth") | Out-Null
+        Write-Log "Iniciando SFC /scannow."
+        Invoke-LoggedProcess -FilePath "sfc.exe" -Arguments @("/scannow") | Out-Null
+    }
+}
+
+function Set-WindowsUpdateMode {
+    param([ValidateSet("Padrao", "Seguranca", "Desativar")][string]$Mode)
+    Invoke-SafeUiAction -Name "Configurar Windows Update" -Action {
+        $path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+        if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force | Out-Null }
+        switch ($Mode) {
+            "Padrao" {
+                Remove-ItemProperty -Path $path -Name "NoAutoUpdate" -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $path -Name "AUOptions" -ErrorAction SilentlyContinue
+                Write-Log "Windows Update restaurado para o comportamento padrao."
+            }
+            "Seguranca" {
+                New-ItemProperty -Path $path -Name "AUOptions" -Value 3 -PropertyType DWord -Force | Out-Null
+                Write-Log "Windows Update configurado para baixar e avisar antes de instalar."
+            }
+            "Desativar" {
+                New-ItemProperty -Path $path -Name "NoAutoUpdate" -Value 1 -PropertyType DWord -Force | Out-Null
+                Write-Log "Atualizacoes automaticas desativadas por politica local."
+            }
+        }
+    }
+}
+
+function Set-AppxSelection {
+    param([object]$Appx, [bool]$Selected)
+    if (-not $Appx) { return }
+    if ($Selected) { [void]$script:SelectedAppxNames.Add($Appx.Package) } else { [void]$script:SelectedAppxNames.Remove($Appx.Package) }
+    Update-SelectedCount
+}
+
+function Invoke-AppxRemoval {
+    Invoke-SafeUiAction -Name "Remover AppX" -Action {
+        $selected = @($script:AppxCatalog | Where-Object { $script:SelectedAppxNames.Contains($_.Package) -and $_.Safe })
+        if ($selected.Count -eq 0) { Write-Log "Nenhum AppX seguro selecionado para remocao."; return }
+        foreach ($appx in $selected) {
+            Write-Log "Removendo AppX: $($appx.Name)"
+            Get-AppxPackage -Name $appx.Package -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq $appx.Package } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Out-Null
+        }
+        Write-Log "Remocao AppX finalizada."
+    }
+}
+
+function Open-Windows11Creator {
+    Invoke-SafeUiAction -Name "Windows 11 Creator" -Action {
+        Write-Log "Abrindo download oficial do Windows 11. Criador de ISO/USB avancado sera implementado em etapa dedicada."
+        Start-Process "https://www.microsoft.com/software-download/windows11"
+    }
+}
+
 function Build-Ui {
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -856,6 +988,8 @@ function Build-Ui {
                 <Button x:Name="TweaksTab" Content="Ajustes" Width="118" Margin="0,0,8,0"/>
                 <Button x:Name="ConfigTab" Content="Configurar" Width="118" Margin="0,0,8,0"/>
                 <Button x:Name="UpdatesTab" Content="Atualizar" Width="118" Margin="0,0,8,0"/>
+                <Button x:Name="AppxTab" Content="AppX" Width="92" Margin="0,0,8,0"/>
+                <Button x:Name="Win11Tab" Content="Win11" Width="92" Margin="0,0,8,0"/>
             </StackPanel>
             <TextBox x:Name="SearchBox" Height="31" Margin="10,0,0,0" Padding="10,0" VerticalContentAlignment="Center"
                      BorderBrush="#CBD5E1" Background="#FFFFFF" Foreground="#0F172A" ToolTip="Buscar por nome, categoria, id ou tag"/>
@@ -877,6 +1011,9 @@ function Build-Ui {
                     <TextBlock Text="Predefinicoes" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <ComboBox x:Name="PresetBox" Height="29" Margin="0,0,0,5"/>
                     <Button x:Name="ApplyPresetButton" Content="Aplicar predefinicao" Margin="0,0,0,10" Height="29"/>
+                    <TextBlock Text="DNS" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="DnsBox" Height="29" Margin="0,0,0,5"/>
+                    <Button x:Name="ApplyDnsButton" Content="Aplicar DNS" Margin="0,0,0,10" Height="29"/>
                     <TextBlock Text="Gerenciador" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <RadioButton Content="WinGet" IsChecked="True" Margin="12,0,0,12"/>
                     <TextBlock Text="Selecao e sistema" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
@@ -884,6 +1021,12 @@ function Build-Ui {
                     <Button x:Name="InstalledButton" Content="Marcar instalados" Margin="0,0,0,5" Height="29"/>
                     <Button x:Name="SelectTweaksButton" Content="Selecionar ajustes seguros" Margin="0,0,0,5" Height="29"/>
                     <Button x:Name="ApplyTweaksButton" Content="Aplicar ajustes marcados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="RemoveAppxButton" Content="Remover AppX marcados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="RepairButton" Content="Reparar Windows" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UpdateDefaultButton" Content="Updates: padrao" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UpdateSecurityButton" Content="Updates: avisar" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UpdateDisableButton" Content="Updates: desativar" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="Win11CreatorButton" Content="Abrir Win11 Creator" Margin="0,0,0,5" Height="29"/>
                     <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,10" Height="29"/>
                     <Border Background="#F1F5F9" CornerRadius="10" Padding="10" Margin="0,4,0,0">
                         <StackPanel>
@@ -927,6 +1070,7 @@ if (-not $window) {
 $script:SearchBox = $window.FindName("SearchBox")
 $script:CategoryBox = $window.FindName("CategoryBox")
 $script:PresetBox = $window.FindName("PresetBox")
+$script:DnsBox = $window.FindName("DnsBox")
 $script:AppsPanel = $window.FindName("AppsPanel")
 $script:LogBox = $window.FindName("LogBox")
 $script:SelectedCountText = $window.FindName("SelectedCountText")
@@ -954,6 +1098,16 @@ if ($script:PresetBox.Items.Count -gt 0) {
     $script:PresetBox.SelectedIndex = 0
 }
 
+foreach ($dns in $script:DnsPresets) {
+    $item = [System.Windows.Controls.ComboBoxItem]::new()
+    $item.Content = $dns.Name
+    $item.Tag = $dns
+    $script:DnsBox.Items.Add($item) | Out-Null
+}
+if ($script:DnsBox.Items.Count -gt 0) {
+    $script:DnsBox.SelectedIndex = 0
+}
+
 $window.FindName("InstallButton").Add_Click({ Invoke-SafeUiAction -Name "Instalar selecionados" -Action { Invoke-WingetForSelection -Action "install" } })
 $window.FindName("UpgradeButton").Add_Click({ Invoke-SafeUiAction -Name "Atualizar selecionados" -Action { Invoke-WingetForSelection -Action "upgrade" } })
 $window.FindName("UninstallButton").Add_Click({ Invoke-SafeUiAction -Name "Desinstalar selecionados" -Action { Invoke-WingetForSelection -Action "uninstall" } })
@@ -966,6 +1120,17 @@ $window.FindName("ApplyPresetButton").Add_Click({
 $window.FindName("InstalledButton").Add_Click({ Select-InstalledApps })
 $window.FindName("SelectTweaksButton").Add_Click({ Select-SafeTweaks })
 $window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Aplicar ajustes seguros" -Action { Invoke-SafeTweaks } })
+$window.FindName("ApplyDnsButton").Add_Click({
+    if ($script:DnsBox.SelectedItem) {
+        Set-GLabDns -Preset $script:DnsBox.SelectedItem.Tag
+    }
+})
+$window.FindName("RemoveAppxButton").Add_Click({ Invoke-AppxRemoval })
+$window.FindName("RepairButton").Add_Click({ Invoke-SystemRepair })
+$window.FindName("UpdateDefaultButton").Add_Click({ Set-WindowsUpdateMode -Mode "Padrao" })
+$window.FindName("UpdateSecurityButton").Add_Click({ Set-WindowsUpdateMode -Mode "Seguranca" })
+$window.FindName("UpdateDisableButton").Add_Click({ Set-WindowsUpdateMode -Mode "Desativar" })
+$window.FindName("Win11CreatorButton").Add_Click({ Open-Windows11Creator })
 $window.FindName("ReloadButton").Add_Click({
     $script:Catalog = Load-AppCatalog
     $script:Tweaks = Load-TweakCatalog
@@ -985,6 +1150,9 @@ $window.FindName("ReloadButton").Add_Click({
 $window.FindName("ClearButton").Add_Click({
     if ($script:ActiveView -eq "Tweaks") {
         Clear-TweakSelection
+    } elseif ($script:ActiveView -eq "Appx") {
+        $script:SelectedAppxNames.Clear()
+        Show-AppxView
     } else {
         Clear-AppSelection
     }
@@ -994,8 +1162,14 @@ $window.FindName("InstallTab").Add_Click({ Refresh-AppGrid })
 $window.FindName("TweaksTab").Add_Click({ Show-TweaksView })
 $window.FindName("ConfigTab").Add_Click({ Show-ConfigView })
 $window.FindName("UpdatesTab").Add_Click({ Show-UpdatesView })
-$script:SearchBox.Add_TextChanged({ Refresh-AppGrid })
-$script:CategoryBox.Add_SelectionChanged({ Refresh-AppGrid })
+$window.FindName("AppxTab").Add_Click({ Show-AppxView })
+$window.FindName("Win11Tab").Add_Click({ Show-Win11View })
+$script:SearchBox.Add_TextChanged({
+    if ($script:ActiveView -eq "Install") { Refresh-AppGrid }
+})
+$script:CategoryBox.Add_SelectionChanged({
+    if ($script:ActiveView -eq "Install") { Refresh-AppGrid }
+})
 
 if (Test-IsAdmin) {
     $adminText.Text = "Executando como administrador."
