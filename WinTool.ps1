@@ -70,6 +70,22 @@ function Invoke-LoggedProcess {
     return $process.ExitCode
 }
 
+function Invoke-SafeUiAction {
+    param(
+        [Parameter(Mandatory=$true)][scriptblock]$Action,
+        [string]$Name = "acao"
+    )
+
+    try {
+        & $Action
+    } catch {
+        Write-Log "Erro ao executar ${Name}: $($_.Exception.Message)"
+        if ($_.ScriptStackTrace) {
+            Write-Log $_.ScriptStackTrace
+        }
+    }
+}
+
 function New-IconBadge {
     param(
         [string]$Text,
@@ -321,40 +337,48 @@ function Show-UpdatesView {
 function Invoke-WingetForSelection {
     param([ValidateSet("install", "uninstall", "upgrade")][string]$Action)
 
-    $apps = Get-SelectedApps
-    if ($apps.Count -eq 0) {
-        Write-Log "Nenhum app selecionado."
-        return
-    }
-
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Log "WinGet nao foi encontrado neste sistema."
-        return
-    }
-
-    foreach ($app in $apps) {
-        Write-Log "${Action}: $($app.name)"
-        $args = @($Action, "--id", $app.id, "--exact", "--accept-package-agreements", "--accept-source-agreements")
-        if ($Action -eq "install" -or $Action -eq "upgrade") {
-            $args += "--silent"
+    Invoke-SafeUiAction -Name "winget $Action" -Action {
+        $apps = Get-SelectedApps
+        if ($apps.Count -eq 0) {
+            Write-Log "Nenhum app selecionado."
+            return
         }
-        Invoke-LoggedProcess -FilePath "winget" -Arguments $args | Out-Null
+
+        $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            Write-Log "WinGet nao foi encontrado neste sistema."
+            return
+        }
+
+        foreach ($app in $apps) {
+            Write-Log "${Action}: $($app.name)"
+            $args = @($Action, "--id", $app.id, "--exact", "--accept-package-agreements", "--accept-source-agreements")
+            if ($Action -eq "install" -or $Action -eq "upgrade") {
+                $args += "--silent"
+            }
+            Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments $args | Out-Null
+        }
     }
 }
 
 function Invoke-UpgradeAll {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Log "WinGet nao foi encontrado neste sistema."
-        return
+    Invoke-SafeUiAction -Name "winget upgrade --all" -Action {
+        $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            Write-Log "WinGet nao foi encontrado neste sistema."
+            return
+        }
+        Invoke-LoggedProcess -FilePath $wingetCommand.Source -Arguments @("upgrade", "--all", "--accept-package-agreements", "--accept-source-agreements") | Out-Null
     }
-    Invoke-LoggedProcess -FilePath "winget" -Arguments @("upgrade", "--all", "--accept-package-agreements", "--accept-source-agreements") | Out-Null
 }
 
 function Invoke-SafeTweaks {
-    Write-Log "Aplicando tweaks seguros de interface."
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "HideFileExt" -Value 0
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Hidden" -Value 1
-    Write-Log "Extensoes e arquivos ocultos agora ficam visiveis para o usuario atual."
+    Invoke-SafeUiAction -Name "tweaks seguros" -Action {
+        Write-Log "Aplicando tweaks seguros de interface."
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "HideFileExt" -Value 0
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Hidden" -Value 1
+        Write-Log "Extensoes e arquivos ocultos agora ficam visiveis para o usuario atual."
+    }
 }
 
 function Build-Ui {
@@ -470,11 +494,11 @@ foreach ($category in $categories) {
 }
 $script:CategoryBox.SelectedIndex = 0
 
-$window.FindName("InstallButton").Add_Click({ Invoke-WingetForSelection -Action "install" })
-$window.FindName("UpgradeButton").Add_Click({ Invoke-WingetForSelection -Action "upgrade" })
-$window.FindName("UninstallButton").Add_Click({ Invoke-WingetForSelection -Action "uninstall" })
-$window.FindName("UpgradeAllButton").Add_Click({ Invoke-UpgradeAll })
-$window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeTweaks })
+$window.FindName("InstallButton").Add_Click({ Invoke-SafeUiAction -Name "Install Selected" -Action { Invoke-WingetForSelection -Action "install" } })
+$window.FindName("UpgradeButton").Add_Click({ Invoke-SafeUiAction -Name "Upgrade Selected" -Action { Invoke-WingetForSelection -Action "upgrade" } })
+$window.FindName("UninstallButton").Add_Click({ Invoke-SafeUiAction -Name "Uninstall Selected" -Action { Invoke-WingetForSelection -Action "uninstall" } })
+$window.FindName("UpgradeAllButton").Add_Click({ Invoke-SafeUiAction -Name "Upgrade All Apps" -Action { Invoke-UpgradeAll } })
+$window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Apply Safe Tweaks" -Action { Invoke-SafeTweaks } })
 $window.FindName("ReloadButton").Add_Click({
     $script:Catalog = Load-AppCatalog
     Write-Log "Catalogo recarregado: $($script:Catalog.Count) apps."
