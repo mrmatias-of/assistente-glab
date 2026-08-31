@@ -500,65 +500,18 @@ function New-InfoCard {
 function New-TweakCard {
     param([object]$Tweak)
 
-    $border = [System.Windows.Controls.Border]::new()
-    $border.Margin = "5"
-    $border.Padding = "9"
-    $border.Width = 265
-    $border.MinHeight = 74
-    $border.BorderBrush = "#CBD5E1"
-    $border.BorderThickness = "1"
-    $border.CornerRadius = "12"
-    $border.Background = if ($Tweak.safe) { "#FFFFFF" } else { "#FFF7ED" }
-
-    $grid = [System.Windows.Controls.Grid]::new()
-    $grid.ColumnDefinitions.Add([System.Windows.Controls.ColumnDefinition]::new())
-    $checkColumn = [System.Windows.Controls.ColumnDefinition]::new()
-    $checkColumn.Width = "Auto"
-    $grid.ColumnDefinitions.Add($checkColumn)
-
-    $stack = [System.Windows.Controls.StackPanel]::new()
-
-    $title = [System.Windows.Controls.TextBlock]::new()
-    $title.Text = $Tweak.name
-    $title.FontWeight = "SemiBold"
-    $title.Foreground = "#0F172A"
-    $title.TextWrapping = "Wrap"
-
-    $desc = [System.Windows.Controls.TextBlock]::new()
-    $desc.Text = $Tweak.description
-    $desc.Foreground = "#475569"
-    $desc.Margin = "0,4,0,0"
-    $desc.FontSize = 12
-    $desc.TextWrapping = "Wrap"
-    $desc.MaxWidth = 205
-
-    $meta = [System.Windows.Controls.TextBlock]::new()
-    $meta.Text = if ($Tweak.safe) { "Seguro | $($Tweak.scope)" } else { "Avancado/planejado | $($Tweak.scope)" }
-    $meta.Foreground = if ($Tweak.safe) { "#047857" } else { "#B45309" }
-    $meta.Margin = "0,5,0,0"
-    $meta.FontSize = 11
-
-    $stack.Children.Add($title) | Out-Null
-    $stack.Children.Add($desc) | Out-Null
-    $stack.Children.Add($meta) | Out-Null
-    [System.Windows.Controls.Grid]::SetColumn($stack, 0)
-    $grid.Children.Add($stack) | Out-Null
-
     $checkbox = [System.Windows.Controls.CheckBox]::new()
-    $checkbox.VerticalAlignment = "Center"
-    $checkbox.Margin = "8,0,0,0"
+    $checkbox.Margin = "0,2,0,2"
+    $checkbox.FontSize = 12
+    $checkbox.Foreground = "#0F172A"
+    $checkbox.Content = if ($Tweak.safe) { "$($Tweak.name)" } else { "$($Tweak.name) - planejado" }
     $checkbox.Tag = $Tweak
     $checkbox.IsEnabled = [bool]$Tweak.safe
     $checkbox.IsChecked = $script:SelectedTweakNames.Contains($Tweak.name)
-    $checkbox.ToolTip = if ($Tweak.safe) { "Selecionar ajuste" } else { "Item avancado ainda nao habilitado" }
+    $checkbox.ToolTip = "$($Tweak.description)`nEscopo: $($Tweak.scope)"
     $checkbox.Add_Checked({ Set-TweakSelection -Tweak $this.Tag -Selected $true })
     $checkbox.Add_Unchecked({ Set-TweakSelection -Tweak $this.Tag -Selected $false })
-    [System.Windows.Controls.Grid]::SetColumn($checkbox, 1)
-    $grid.Children.Add($checkbox) | Out-Null
-
-    $border.Child = $grid
-    $border.Tag = $checkbox
-    return $border
+    return $checkbox
 }
 
 function New-SectionHeader {
@@ -694,19 +647,80 @@ function Refresh-AppGrid {
 function Show-TweaksView {
     $script:ActiveView = "Tweaks"
     Clear-MainPanel
-    $lastCategory = $null
+
+    $grid = [System.Windows.Controls.Grid]::new()
+    $grid.Width = 930
+    $grid.Margin = "4"
+    $left = [System.Windows.Controls.ColumnDefinition]::new()
+    $left.Width = "*"
+    $right = [System.Windows.Controls.ColumnDefinition]::new()
+    $right.Width = "*"
+    $grid.ColumnDefinitions.Add($left)
+    $grid.ColumnDefinitions.Add($right)
+
+    $leftPanel = [System.Windows.Controls.StackPanel]::new()
+    $rightPanel = [System.Windows.Controls.StackPanel]::new()
+
+    $leftBorder = [System.Windows.Controls.Border]::new()
+    $leftBorder.Padding = "10"
+    $leftBorder.Margin = "0,0,5,0"
+    $leftBorder.Background = "#FFFFFF"
+    $leftBorder.BorderBrush = "#CBD5E1"
+    $leftBorder.BorderThickness = "1"
+    $leftBorder.CornerRadius = "8"
+    $leftBorder.Child = $leftPanel
+
+    $rightBorder = [System.Windows.Controls.Border]::new()
+    $rightBorder.Padding = "10"
+    $rightBorder.Margin = "5,0,0,0"
+    $rightBorder.Background = "#FFFFFF"
+    $rightBorder.BorderBrush = "#CBD5E1"
+    $rightBorder.BorderThickness = "1"
+    $rightBorder.CornerRadius = "8"
+    $rightBorder.Child = $rightPanel
+
+    [System.Windows.Controls.Grid]::SetColumn($leftBorder, 0)
+    [System.Windows.Controls.Grid]::SetColumn($rightBorder, 1)
+    $grid.Children.Add($leftBorder) | Out-Null
+    $grid.Children.Add($rightBorder) | Out-Null
+
+    $titleLeft = [System.Windows.Controls.TextBlock]::new()
+    $titleLeft.Text = "Ajustes essenciais e avancados"
+    $titleLeft.FontFamily = "Consolas"
+    $titleLeft.FontSize = 13
+    $titleLeft.Foreground = "#0F172A"
+    $titleLeft.Margin = "0,0,0,6"
+    $leftPanel.Children.Add($titleLeft) | Out-Null
+
+    $titleRight = [System.Windows.Controls.TextBlock]::new()
+    $titleRight.Text = "Preferencias rapidas"
+    $titleRight.FontFamily = "Consolas"
+    $titleRight.FontSize = 13
+    $titleRight.Foreground = "#0F172A"
+    $titleRight.Margin = "0,0,0,8"
+    $rightPanel.Children.Add($titleRight) | Out-Null
+
     foreach ($tweak in (Get-AllTweaks | Sort-Object category, name)) {
-        if ($tweak.category -ne $lastCategory) {
-            $subtitle = if ($tweak.category -like "Avancado*") {
-                "Itens visiveis para planejamento; ficam bloqueados ate receberem confirmacao dedicada."
-            } else {
-                "Marque os ajustes que deseja aplicar. Apenas itens seguros podem ser selecionados."
-            }
-            $script:AppsPanel.Children.Add((New-SectionHeader -Title $tweak.category -Subtitle $subtitle)) | Out-Null
-            $lastCategory = $tweak.category
+        $headerText = $null
+        if ($script:lastTweakCategory -ne $tweak.category) {
+            $headerText = $tweak.category
+            $script:lastTweakCategory = $tweak.category
         }
-        $script:AppsPanel.Children.Add((New-TweakCard -Tweak $tweak)) | Out-Null
+
+        $targetPanel = if ($tweak.category -in @("Aparencia", "Barra de tarefas e menu iniciar")) { $rightPanel } else { $leftPanel }
+        if ($headerText) {
+            $header = [System.Windows.Controls.TextBlock]::new()
+            $header.Text = $headerText
+            $header.FontFamily = "Consolas"
+            $header.FontSize = 12
+            $header.Margin = "0,8,0,3"
+            $header.Foreground = "#334155"
+            $targetPanel.Children.Add($header) | Out-Null
+        }
+        $targetPanel.Children.Add((New-TweakCard -Tweak $tweak)) | Out-Null
     }
+    $script:lastTweakCategory = $null
+    $script:AppsPanel.Children.Add($grid) | Out-Null
     $safeCount = @((Get-AllTweaks) | Where-Object { $_.safe }).Count
     Update-SelectedCount
     Write-Status "Ajustes" "$safeCount ajustes seguros disponiveis"
