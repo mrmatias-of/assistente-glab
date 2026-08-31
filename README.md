@@ -1,54 +1,171 @@
 # Assistente G-LAB
 
-Um assistente local inspirado no Chris Titus Tech WinUtil: interface WPF em PowerShell, catalogo de aplicativos em JSON, icones reais por app e acoes em lote via WinGet.
+Central de manutencao para Windows feita em PowerShell/WPF, com instalacao de aplicativos via WinGet, catalogo em JSON, icones por app, tweaks seguros e suporte a inicializacao remota.
 
-## Como rodar localmente
+O projeto segue a ideia de uma ferramenta unica para preparar, corrigir e padronizar maquinas Windows com rapidez, mantendo as acoes visiveis, auditaveis e faceis de evoluir.
 
-Abra o PowerShell nesta pasta e execute:
+## Comando Rapido
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\WinTool.ps1
-```
-
-Ou use o bootstrap local:
+Quando a rota do dominio estiver publicada:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\Start-Assistente-GLAB.ps1
+irm https://www.glabcursos.com.br/win | iex
 ```
 
-## Como virar um comando estilo `irm ... | iex`
-
-Quando voce hospedar o conteudo em um servidor HTTPS, o endpoint deve devolver um script pequeno de bootstrap que baixe/execute a versao principal. O modelo seria:
+Enquanto isso, tambem e possivel chamar diretamente pelo GitHub:
 
 ```powershell
 irm https://raw.githubusercontent.com/mrmatias-of/assistente-glab/main/web-bootstrap-template.ps1 | iex
 ```
 
-Para producao, assine os scripts, use HTTPS, publique hashes das versoes e mantenha acoes sensiveis separadas da inicializacao.
+## Recursos
 
-## Publicar no GitHub
+- Interface grafica WPF em PowerShell.
+- Catalogo de aplicativos em `config/apps.json`.
+- Instalacao, atualizacao e remocao de apps via WinGet.
+- Busca por nome, ID, categoria, descricao e tags.
+- Categorias como Browsers, Development, Microsoft Tools, Multimedia Tools, Pro Tools e Utilities.
+- Icones locais em PNG para os cards dos aplicativos.
+- Abas dedicadas para Install, Tweaks, Config e Updates.
+- Console de log integrado para acompanhar comandos executados.
+- Bootstrap remoto que baixa o projeto completo antes de abrir a interface.
 
-Depois de criar um repositorio vazio no GitHub, rode nesta pasta:
+## Execucao Local
+
+Clone o repositorio ou abra a pasta do projeto e execute:
 
 ```powershell
-git remote add origin https://github.com/SEU-USUARIO/assistente-glab.git
-git branch -M main
-git push -u origin main
+powershell -ExecutionPolicy Bypass -File .\Start-Assistente-GLAB.ps1
 ```
 
-## Arquivos
+Tambem e possivel chamar diretamente o app principal:
 
-- `WinTool.ps1`: aplicacao WPF principal do Assistente G-LAB.
-- `Start-Assistente-GLAB.ps1`: inicializador local com nome do projeto.
-- `config/apps.json`: catalogo de aplicativos WinGet, com categoria, cor e icone.
-- `assets/icons`: imagens PNG locais usadas nos cards dos aplicativos.
-- `src/New-IconAssets.ps1`: baixa favicons reais dos dominios oficiais e usa fallback local quando necessario.
-- `bootstrap.ps1`: inicializador local legado.
-- `web-bootstrap-template.ps1`: modelo para criar um endpoint estilo `irm ... | iex`.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\WinTool.ps1
+```
 
-## Escopo seguro deste MVP
+Para validar o carregamento sem abrir a janela:
 
-- Instala, atualiza e remove aplicativos selecionados usando WinGet.
-- Atualiza todos os aplicativos via `winget upgrade --all`.
-- Aplica apenas tweaks simples no usuario atual: mostrar extensoes e arquivos ocultos.
-- Nao remove bloatware, nao mexe em servicos do sistema e nao altera politicas globais.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\WinTool.ps1 -ValidateOnly
+```
+
+## Estrutura
+
+```text
+.
+├── WinTool.ps1
+├── Start-Assistente-GLAB.ps1
+├── bootstrap.ps1
+├── web-bootstrap-template.ps1
+├── config
+│   └── apps.json
+├── assets
+│   └── icons
+└── src
+    └── New-IconAssets.ps1
+```
+
+## Catalogo de Aplicativos
+
+Os apps ficam em `config/apps.json`. Cada item usa este formato:
+
+```json
+{
+  "name": "Visual Studio Code",
+  "id": "Microsoft.VisualStudioCode",
+  "category": "Development",
+  "description": "Editor de codigo da Microsoft.",
+  "icon": "VS",
+  "accent": "#007ACC",
+  "domain": "code.visualstudio.com",
+  "tags": ["code", "editor", "dev"]
+}
+```
+
+O campo `id` deve ser o identificador exato do WinGet. Para conferir um app:
+
+```powershell
+winget search "nome do app"
+```
+
+## Icones
+
+Os icones usados pela interface ficam em:
+
+```text
+assets/icons
+```
+
+Para baixar favicons reais com base nos dominios do catalogo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\src\New-IconAssets.ps1
+```
+
+Se algum download falhar, o script gera um fallback visual com as iniciais do app.
+
+## Bootstrap Remoto
+
+O arquivo `web-bootstrap-template.ps1` baixa o ZIP da branch `main`, extrai em uma pasta temporaria e executa o `WinTool.ps1`.
+
+Fluxo:
+
+```text
+irm dominio/win | iex
+        │
+        ├── baixa assistente-glab/main.zip
+        ├── extrai em %TEMP%\Assistente-GLAB
+        └── executa WinTool.ps1 em modo STA
+```
+
+## Seguranca
+
+Este projeto executa comandos no Windows. Leia o script antes de usar em maquinas de producao.
+
+Boas praticas recomendadas:
+
+- Usar HTTPS para qualquer bootstrap remoto.
+- Evitar comandos destrutivos na inicializacao.
+- Separar tweaks sensiveis de acoes comuns.
+- Manter logs visiveis para o usuario.
+- Preferir alteracoes reversiveis.
+- Assinar scripts em ambientes profissionais.
+- Publicar releases ou commits fixos quando precisar de previsibilidade.
+
+O MVP atual aplica somente tweaks simples no usuario atual:
+
+- Mostrar extensoes de arquivos.
+- Mostrar arquivos ocultos.
+
+## Desenvolvimento
+
+Depois de alterar o projeto, valide:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\WinTool.ps1 -ValidateOnly
+```
+
+Depois registre as mudancas:
+
+```powershell
+git status
+git add .
+git commit -m "Describe your change"
+git push
+```
+
+## Roadmap
+
+- Substituir todos os fallbacks por icones oficiais.
+- Adicionar perfis de instalacao, como tecnico, gamer, dev e escritorio.
+- Criar painel de apps instalados.
+- Adicionar backup/restore de configuracoes.
+- Criar pontos de restauracao antes de tweaks sensiveis.
+- Separar modulos em `functions`, `scripts` e `config`.
+- Publicar releases versionadas.
+- Adicionar assinatura de script.
+
+## Inspiracao
+
+Inspirado no formato de utilitarios Windows como o Chris Titus Tech WinUtil, com foco em uma identidade propria para o ecossistema G-LAB.
