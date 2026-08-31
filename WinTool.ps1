@@ -9,6 +9,11 @@ $script:ConfigPath = Join-Path $script:Root "config\apps.json"
 $script:IconRoot = Join-Path $script:Root "assets\icons"
 $script:ActiveView = "Install"
 
+if (-not $ValidateOnly -and [System.Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
+    powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path
+    return
+}
+
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
@@ -502,4 +507,8 @@ if ($ValidateOnly) {
     "ValidateOnly OK: $($script:Catalog.Count) apps carregados."
     return
 }
+if (-not $window) {
+    throw "A janela WPF nao foi inicializada. Execute novamente com powershell.exe -STA."
+}
+
 [void]$window.ShowDialog()
