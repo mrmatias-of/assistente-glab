@@ -390,10 +390,10 @@ function New-AppCard {
     param([object]$App)
 
     $border = [System.Windows.Controls.Border]::new()
-    $border.Margin = "7"
-    $border.Padding = "12"
-    $border.Width = 300
-    $border.MinHeight = 86
+    $border.Margin = "5"
+    $border.Padding = "9"
+    $border.Width = 265
+    $border.MinHeight = 72
     $border.BorderBrush = "#CBD5E1"
     $border.BorderThickness = "1"
     $border.CornerRadius = "12"
@@ -462,10 +462,10 @@ function New-InfoCard {
     )
 
     $card = [System.Windows.Controls.Border]::new()
-    $card.Margin = "7"
-    $card.Padding = "14"
-    $card.Width = 300
-    $card.MinHeight = 122
+    $card.Margin = "5"
+    $card.Padding = "10"
+    $card.Width = 265
+    $card.MinHeight = 88
     $card.BorderBrush = "#CBD5E1"
     $card.BorderThickness = "1"
     $card.CornerRadius = "12"
@@ -488,7 +488,7 @@ function New-InfoCard {
     $bodyBlock.Margin = "0,4,0,0"
     $bodyBlock.TextWrapping = "Wrap"
     $bodyBlock.FontSize = 12
-    $bodyBlock.MaxWidth = 215
+    $bodyBlock.MaxWidth = 190
 
     $stack.Children.Add($titleBlock) | Out-Null
     $stack.Children.Add($bodyBlock) | Out-Null
@@ -501,10 +501,10 @@ function New-TweakCard {
     param([object]$Tweak)
 
     $border = [System.Windows.Controls.Border]::new()
-    $border.Margin = "7"
-    $border.Padding = "12"
-    $border.Width = 300
-    $border.MinHeight = 92
+    $border.Margin = "5"
+    $border.Padding = "9"
+    $border.Width = 265
+    $border.MinHeight = 74
     $border.BorderBrush = "#CBD5E1"
     $border.BorderThickness = "1"
     $border.CornerRadius = "12"
@@ -530,7 +530,7 @@ function New-TweakCard {
     $desc.Margin = "0,4,0,0"
     $desc.FontSize = 12
     $desc.TextWrapping = "Wrap"
-    $desc.MaxWidth = 235
+    $desc.MaxWidth = 205
 
     $meta = [System.Windows.Controls.TextBlock]::new()
     $meta.Text = if ($Tweak.safe) { "Seguro | $($Tweak.scope)" } else { "Avancado/planejado | $($Tweak.scope)" }
@@ -568,10 +568,10 @@ function New-SectionHeader {
     )
 
     $outer = [System.Windows.Controls.Border]::new()
-    $outer.Width = 940
-    $outer.Margin = "8,18,8,8"
-    $outer.Padding = "12,10"
-    $outer.CornerRadius = "12"
+    $outer.Width = 1100
+    $outer.Margin = "5,10,5,5"
+    $outer.Padding = "10,7"
+    $outer.CornerRadius = "10"
     $outer.Background = "#E0E7FF"
     $outer.BorderBrush = "#C7D2FE"
     $outer.BorderThickness = "1"
@@ -580,7 +580,7 @@ function New-SectionHeader {
 
     $titleBlock = [System.Windows.Controls.TextBlock]::new()
     $titleBlock.Text = $Title
-    $titleBlock.FontSize = 16
+    $titleBlock.FontSize = 14
     $titleBlock.FontWeight = "SemiBold"
     $titleBlock.Foreground = "#0F172A"
     $panel.Children.Add($titleBlock) | Out-Null
@@ -798,7 +798,7 @@ function Build-Ui {
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Assistente G-LAB" Height="820" Width="1280" WindowStartupLocation="CenterScreen"
+        Title="Assistente G-LAB" Height="760" Width="1220" WindowStartupLocation="CenterScreen"
         Background="#EEF2F7" FontFamily="Segoe UI">
     <Window.Resources>
         <Style TargetType="Button">
@@ -813,8 +813,8 @@ function Build-Ui {
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="82"/>
-            <RowDefinition Height="54"/>
+            <RowDefinition Height="68"/>
+            <RowDefinition Height="46"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="150"/>
         </Grid.RowDefinitions>
@@ -843,34 +843,34 @@ function Build-Ui {
                 <Button x:Name="ConfigTab" Content="Configurar" Width="118" Margin="0,0,8,0"/>
                 <Button x:Name="UpdatesTab" Content="Atualizar" Width="118" Margin="0,0,8,0"/>
             </StackPanel>
-            <TextBox x:Name="SearchBox" Height="36" Margin="12,0,0,0" Padding="12,0" VerticalContentAlignment="Center"
+            <TextBox x:Name="SearchBox" Height="31" Margin="10,0,0,0" Padding="10,0" VerticalContentAlignment="Center"
                      BorderBrush="#CBD5E1" Background="#FFFFFF" Foreground="#0F172A" ToolTip="Buscar por nome, categoria, id ou tag"/>
         </DockPanel>
 
         <Grid Grid.Row="2" Margin="16,0,16,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="230"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Padding="14" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="14">
                 <StackPanel>
                     <TextBlock Text="Acoes" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,10"/>
-                    <Button x:Name="InstallButton" Content="+ Instalar selecionados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="UpgradeButton" Content="↑ Atualizar selecionados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="UninstallButton" Content="− Desinstalar selecionados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="UpgradeAllButton" Content="Atualizar todos os apps" Margin="0,0,0,16" Height="34"/>
+                    <Button x:Name="InstallButton" Content="+ Instalar selecionados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UpgradeButton" Content="↑ Atualizar selecionados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UninstallButton" Content="− Desinstalar selecionados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="UpgradeAllButton" Content="Atualizar todos os apps" Margin="0,0,0,10" Height="29"/>
                     <TextBlock Text="Predefinicoes" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
-                    <ComboBox x:Name="PresetBox" Height="32" Margin="0,0,0,7"/>
-                    <Button x:Name="ApplyPresetButton" Content="Aplicar predefinicao" Margin="0,0,0,14" Height="34"/>
+                    <ComboBox x:Name="PresetBox" Height="29" Margin="0,0,0,5"/>
+                    <Button x:Name="ApplyPresetButton" Content="Aplicar predefinicao" Margin="0,0,0,10" Height="29"/>
                     <TextBlock Text="Gerenciador" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <RadioButton Content="WinGet" IsChecked="True" Margin="12,0,0,12"/>
                     <TextBlock Text="Selecao e sistema" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
-                    <Button x:Name="ClearButton" Content="Limpar selecao" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="InstalledButton" Content="Marcar instalados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="SelectTweaksButton" Content="Selecionar ajustes seguros" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="ApplyTweaksButton" Content="Aplicar ajustes marcados" Margin="0,0,0,7" Height="34"/>
-                    <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,14" Height="34"/>
+                    <Button x:Name="ClearButton" Content="Limpar selecao" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="InstalledButton" Content="Marcar instalados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="SelectTweaksButton" Content="Selecionar ajustes seguros" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="ApplyTweaksButton" Content="Aplicar ajustes marcados" Margin="0,0,0,5" Height="29"/>
+                    <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,10" Height="29"/>
                     <Border Background="#F1F5F9" CornerRadius="10" Padding="10" Margin="0,4,0,0">
                         <StackPanel>
                             <TextBlock x:Name="SelectedCountText" Text="Selecionados: 0" FontWeight="SemiBold" Foreground="#0F172A"/>
@@ -881,7 +881,7 @@ function Build-Ui {
             </Border>
 
             <DockPanel Grid.Column="1" Margin="10,0,0,0">
-                <ComboBox x:Name="CategoryBox" DockPanel.Dock="Top" Height="34" Margin="0,0,0,10" Padding="8,0"/>
+                <ComboBox x:Name="CategoryBox" DockPanel.Dock="Top" Height="30" Margin="0,0,0,6" Padding="8,0"/>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Background="Transparent">
                     <WrapPanel x:Name="AppsPanel"/>
                 </ScrollViewer>
