@@ -10,6 +10,7 @@ $script:TweaksPath = Join-Path $script:Root "config\tweaks.json"
 $script:PresetsPath = Join-Path $script:Root "config\presets.json"
 $script:IconRoot = Join-Path $script:Root "assets\icons"
 $script:ActiveView = "Install"
+$script:SelectedAppIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 if (-not $ValidateOnly -and [System.Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
     powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path
@@ -257,10 +258,9 @@ function New-AppIcon {
 
 function Get-SelectedApps {
     $selected = New-Object System.Collections.Generic.List[object]
-    foreach ($child in $script:AppsPanel.Children) {
-        $checkbox = $child.Tag
-        if ($checkbox -and $checkbox.IsChecked) {
-            [void]$selected.Add($checkbox.Tag)
+    foreach ($app in $script:Catalog) {
+        if ($script:SelectedAppIds.Contains($app.id)) {
+            [void]$selected.Add($app)
         }
     }
     return $selected
@@ -268,8 +268,83 @@ function Get-SelectedApps {
 
 function Update-SelectedCount {
     if (-not $script:SelectedCountText) { return }
-    $count = (Get-SelectedApps).Count
+    $count = $script:SelectedAppIds.Count
     $script:SelectedCountText.Text = "Selecionados: $count"
+}
+
+function Set-AppSelection {
+    param(
+        [object]$App,
+        [bool]$Selected
+    )
+
+    if (-not $App -or [string]::IsNullOrWhiteSpace($App.id)) { return }
+    if ($Selected) {
+        [void]$script:SelectedAppIds.Add($App.id)
+    } else {
+        [void]$script:SelectedAppIds.Remove($App.id)
+    }
+    Update-SelectedCount
+}
+
+function Clear-AppSelection {
+    $script:SelectedAppIds.Clear()
+    foreach ($child in $script:AppsPanel.Children) {
+        $checkbox = $child.Tag
+        if ($checkbox -and $checkbox -is [System.Windows.Controls.CheckBox]) {
+            $checkbox.IsChecked = $false
+        }
+    }
+    Update-SelectedCount
+}
+
+function Select-PresetApps {
+    param([Parameter(Mandatory=$true)][string]$PresetName)
+
+    $preset = $script:Presets.PSObject.Properties[$PresetName]
+    if (-not $preset) {
+        Write-Log "Preset nao encontrado: $PresetName"
+        return
+    }
+
+    Clear-AppSelection
+    foreach ($appId in @($preset.Value.apps)) {
+        [void]$script:SelectedAppIds.Add($appId)
+    }
+    Refresh-AppGrid
+    Write-Log "Preset aplicado: $PresetName ($($script:SelectedAppIds.Count) apps)."
+}
+
+function Select-InstalledApps {
+    Invoke-SafeUiAction -Name "mostrar apps instalados" -Action {
+        $wingetCommand = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            Write-Log "WinGet nao foi encontrado neste sistema."
+            return
+        }
+
+        Write-Log "Lendo apps instalados pelo WinGet..."
+        $originalEncoding = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+            $installedText = (& $wingetCommand.Source list --accept-source-agreements --disable-interactivity 2>&1) -join "`n"
+        } finally {
+            [Console]::OutputEncoding = $originalEncoding
+        }
+
+        Clear-AppSelection
+        foreach ($app in $script:Catalog) {
+            $packageId = ($app.id -replace "^msstore:", "")
+            if ([string]::IsNullOrWhiteSpace($packageId)) { continue }
+            $pattern = "(?im)[^\S\r\n]{2,}$([regex]::Escape($packageId))(?=[^\S\r\n]{2,}|$)"
+            if ($installedText -match $pattern) {
+                [void]$script:SelectedAppIds.Add($app.id)
+            }
+        }
+
+        Refresh-AppGrid
+        Write-Log "Apps instalados marcados: $($script:SelectedAppIds.Count)."
+    }
 }
 
 function New-AppCard {
@@ -328,8 +403,9 @@ function New-AppCard {
     $checkbox.Margin = "8,0,0,0"
     $checkbox.ToolTip = "Selecionar $($App.name)"
     $checkbox.Tag = $App
-    $checkbox.Add_Checked({ Update-SelectedCount })
-    $checkbox.Add_Unchecked({ Update-SelectedCount })
+    $checkbox.IsChecked = $script:SelectedAppIds.Contains($App.id)
+    $checkbox.Add_Checked({ Set-AppSelection -App $this.Tag -Selected $true })
+    $checkbox.Add_Unchecked({ Set-AppSelection -App $this.Tag -Selected $false })
     [System.Windows.Controls.Grid]::SetColumn($checkbox, 1)
     $grid.Children.Add($checkbox) | Out-Null
 
@@ -488,7 +564,7 @@ function Write-Status {
 function Refresh-AppGrid {
     $script:ActiveView = "Install"
     $query = $script:SearchBox.Text.Trim().ToLowerInvariant()
-    $category = $script:CategoryBox.SelectedItem.Content
+    $category = $script:CategoryBox.SelectedItem.Tag
 
     Clear-MainPanel
     $apps = $script:Catalog | Where-Object {
@@ -515,7 +591,7 @@ function Refresh-AppGrid {
 function Show-TweaksView {
     $script:ActiveView = "Tweaks"
     Clear-MainPanel
-    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Tweaks seguros" -Subtitle "Ajustes conservadores carregados de config/tweaks.json. Itens planejados aparecem separados, mas nao sao aplicados.")) | Out-Null
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Ajustes seguros" -Subtitle "Ajustes conservadores carregados de config/tweaks.json. Itens planejados aparecem separados, mas nao sao aplicados.")) | Out-Null
     foreach ($tweak in (Get-AllTweaks | Sort-Object category, name)) {
         $icon = if ($tweak.safe) { "OK" } else { "!" }
         $accent = if ($tweak.safe) { "#16A34A" } else { "#F59E0B" }
@@ -539,16 +615,16 @@ function Show-ConfigView {
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Catalogo JSON" -Body $script:ConfigPath -Icon "JS" -Accent "#2563EB")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Administrador" -Body $adminStatus -Icon "AD" -Accent "#64748B")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "WinGet" -Body $wingetStatus -Icon "WG" -Accent "#7C3AED")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Presets" -Body "$presetCount presets carregados de $script:PresetsPath" -Icon "PR" -Accent "#0EA5E9")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Tweaks" -Body "$tweakCount tweaks carregados de $script:TweaksPath" -Icon "TW" -Accent "#16A34A")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Predefinicoes" -Body "$presetCount predefinicoes carregadas de $script:PresetsPath" -Icon "PR" -Accent "#0EA5E9")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Ajustes" -Body "$tweakCount ajustes carregados de $script:TweaksPath" -Icon "AJ" -Accent "#16A34A")) | Out-Null
     Write-Status "Configurar" "Ambiente e configuracoes inspecionados"
 }
 
 function Show-UpdatesView {
     $script:ActiveView = "Updates"
     Clear-MainPanel
-    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Atualizacoes" -Subtitle "Fluxos de update usando WinGet com argumentos validados.")) | Out-Null
-    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar selecionados" -Body "Usa o mesmo fluxo validado de pacotes, com source winget/msstore por app." -Icon "UP" -Accent "#2563EB")) | Out-Null
+    $script:AppsPanel.Children.Add((New-SectionHeader -Title "Atualizacoes" -Subtitle "Fluxos de atualizacao usando WinGet com argumentos validados.")) | Out-Null
+    $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar selecionados" -Body "Usa o mesmo fluxo validado de pacotes, com fonte winget/msstore por app." -Icon "AT" -Accent "#2563EB")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Atualizar todos" -Body "Executa winget upgrade --all --include-unknown com aceite de acordos e modo silencioso." -Icon "ALL" -Accent "#DC2626")) | Out-Null
     $script:AppsPanel.Children.Add((New-InfoCard -Title "Registro" -Body "O resultado aparece no console de log abaixo." -Icon "LOG" -Accent "#111827")) | Out-Null
     Write-Status "Atualizar" "Acoes de atualizacao disponiveis"
@@ -675,10 +751,14 @@ function Build-Ui {
                     <Button x:Name="UpgradeButton" Content="↑ Atualizar selecionados" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="UninstallButton" Content="− Desinstalar selecionados" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="UpgradeAllButton" Content="Atualizar todos os apps" Margin="0,0,0,16" Height="34"/>
+                    <TextBlock Text="Predefinicoes" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="PresetBox" Height="32" Margin="0,0,0,7"/>
+                    <Button x:Name="ApplyPresetButton" Content="Aplicar predefinicao" Margin="0,0,0,14" Height="34"/>
                     <TextBlock Text="Gerenciador" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <RadioButton Content="WinGet" IsChecked="True" Margin="12,0,0,12"/>
                     <TextBlock Text="Selecao e sistema" FontSize="13" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,5"/>
                     <Button x:Name="ClearButton" Content="Limpar selecao" Margin="0,0,0,7" Height="34"/>
+                    <Button x:Name="InstalledButton" Content="Marcar instalados" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="ApplyTweaksButton" Content="Aplicar tweaks seguros" Margin="0,0,0,7" Height="34"/>
                     <Button x:Name="ReloadButton" Content="Recarregar catalogos" Margin="0,0,0,14" Height="34"/>
                     <Border Background="#F1F5F9" CornerRadius="10" Padding="10" Margin="0,4,0,0">
@@ -722,25 +802,45 @@ if (-not $window) {
 
 $script:SearchBox = $window.FindName("SearchBox")
 $script:CategoryBox = $window.FindName("CategoryBox")
+$script:PresetBox = $window.FindName("PresetBox")
 $script:AppsPanel = $window.FindName("AppsPanel")
 $script:LogBox = $window.FindName("LogBox")
 $script:SelectedCountText = $window.FindName("SelectedCountText")
 $script:StatusText = $window.FindName("StatusText")
 $adminText = $window.FindName("AdminText")
 
-$categories = @("All") + ($script:Catalog | Select-Object -ExpandProperty category -Unique | Sort-Object)
+$categories = @([pscustomobject]@{ Label = "Todos"; Value = "All" }) + (($script:Catalog | Select-Object -ExpandProperty category -Unique | Sort-Object) | ForEach-Object {
+    [pscustomobject]@{ Label = $_; Value = $_ }
+})
 foreach ($category in $categories) {
     $item = [System.Windows.Controls.ComboBoxItem]::new()
-    $item.Content = $category
+    $item.Content = $category.Label
+    $item.Tag = $category.Value
     $script:CategoryBox.Items.Add($item) | Out-Null
 }
 $script:CategoryBox.SelectedIndex = 0
 
-$window.FindName("InstallButton").Add_Click({ Invoke-SafeUiAction -Name "Install Selected" -Action { Invoke-WingetForSelection -Action "install" } })
-$window.FindName("UpgradeButton").Add_Click({ Invoke-SafeUiAction -Name "Upgrade Selected" -Action { Invoke-WingetForSelection -Action "upgrade" } })
-$window.FindName("UninstallButton").Add_Click({ Invoke-SafeUiAction -Name "Uninstall Selected" -Action { Invoke-WingetForSelection -Action "uninstall" } })
-$window.FindName("UpgradeAllButton").Add_Click({ Invoke-SafeUiAction -Name "Upgrade All Apps" -Action { Invoke-UpgradeAll } })
-$window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Apply Safe Tweaks" -Action { Invoke-SafeTweaks } })
+foreach ($preset in $script:Presets.PSObject.Properties) {
+    $item = [System.Windows.Controls.ComboBoxItem]::new()
+    $item.Content = "$($preset.Name) - $($preset.Value.description)"
+    $item.Tag = $preset.Name
+    $script:PresetBox.Items.Add($item) | Out-Null
+}
+if ($script:PresetBox.Items.Count -gt 0) {
+    $script:PresetBox.SelectedIndex = 0
+}
+
+$window.FindName("InstallButton").Add_Click({ Invoke-SafeUiAction -Name "Instalar selecionados" -Action { Invoke-WingetForSelection -Action "install" } })
+$window.FindName("UpgradeButton").Add_Click({ Invoke-SafeUiAction -Name "Atualizar selecionados" -Action { Invoke-WingetForSelection -Action "upgrade" } })
+$window.FindName("UninstallButton").Add_Click({ Invoke-SafeUiAction -Name "Desinstalar selecionados" -Action { Invoke-WingetForSelection -Action "uninstall" } })
+$window.FindName("UpgradeAllButton").Add_Click({ Invoke-SafeUiAction -Name "Atualizar todos os apps" -Action { Invoke-UpgradeAll } })
+$window.FindName("ApplyPresetButton").Add_Click({
+    if ($script:PresetBox.SelectedItem) {
+        Select-PresetApps -PresetName $script:PresetBox.SelectedItem.Tag
+    }
+})
+$window.FindName("InstalledButton").Add_Click({ Select-InstalledApps })
+$window.FindName("ApplyTweaksButton").Add_Click({ Invoke-SafeUiAction -Name "Aplicar ajustes seguros" -Action { Invoke-SafeTweaks } })
 $window.FindName("ReloadButton").Add_Click({
     $script:Catalog = Load-AppCatalog
     $script:Tweaks = Load-TweakCatalog
@@ -758,10 +858,7 @@ $window.FindName("ReloadButton").Add_Click({
     }
 })
 $window.FindName("ClearButton").Add_Click({
-    foreach ($child in $script:AppsPanel.Children) {
-        if ($child.Tag) { $child.Tag.IsChecked = $false }
-    }
-    Update-SelectedCount
+    Clear-AppSelection
 })
 
 $window.FindName("InstallTab").Add_Click({ Refresh-AppGrid })

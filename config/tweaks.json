@@ -1,59 +1,38 @@
 {
   "Explorer": [
-    {
-      "name": "ShowFileExtensions",
-      "description": "Mostra extensoes de arquivos no Explorer.",
-      "scope": "HKCU",
-      "safe": true,
-      "type": "registry",
-      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-      "property": "HideFileExt",
-      "value": 0,
-      "valueKind": "DWord"
-    },
-    {
-      "name": "ShowHiddenFiles",
-      "description": "Mostra arquivos ocultos no Explorer.",
-      "scope": "HKCU",
-      "safe": true,
-      "type": "registry",
-      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-      "property": "Hidden",
-      "value": 1,
-      "valueKind": "DWord"
-    },
-    {
-      "name": "LaunchToThisPC",
-      "description": "Abre o Explorer em Este Computador.",
-      "scope": "HKCU",
-      "safe": true,
-      "type": "registry",
-      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-      "property": "LaunchTo",
-      "value": 1,
-      "valueKind": "DWord"
-    }
+    { "name": "Mostrar extensoes de arquivos", "description": "Mostra extensoes como .exe, .zip, .pdf e .docx no Explorador de Arquivos.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "HideFileExt", "value": 0, "valueKind": "DWord" },
+    { "name": "Mostrar arquivos ocultos", "description": "Exibe arquivos e pastas ocultas do usuario atual.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "Hidden", "value": 1, "valueKind": "DWord" },
+    { "name": "Abrir Explorer em Este Computador", "description": "Troca a tela inicial do Explorer para Este Computador.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "LaunchTo", "value": 1, "valueKind": "DWord" },
+    { "name": "Mostrar sempre barras de rolagem", "description": "Mantem barras de rolagem visiveis em aplicativos modernos.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Control Panel\\Accessibility", "property": "DynamicScrollbars", "value": 0, "valueKind": "DWord" }
   ],
-  "Privacy": [
-    {
-      "name": "DisableAdvertisingId",
-      "description": "Desativa o ID de publicidade do Windows para o usuario atual.",
-      "scope": "HKCU",
-      "safe": true,
-      "type": "registry",
-      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
-      "property": "Enabled",
-      "value": 0,
-      "valueKind": "DWord"
-    }
+  "Barra de tarefas e menu iniciar": [
+    { "name": "Desativar busca do Bing no iniciar", "description": "Remove resultados da web/Bing da busca do menu iniciar.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer", "property": "DisableSearchBoxSuggestions", "value": 1, "valueKind": "DWord" },
+    { "name": "Desativar recomendacoes do iniciar", "description": "Reduz recomendacoes e sugestoes no menu iniciar.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "Start_IrisRecommendations", "value": 0, "valueKind": "DWord" },
+    { "name": "Mostrar segundos no relogio", "description": "Mostra segundos no relogio da bandeja do sistema.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "ShowSecondsInSystemClock", "value": 1, "valueKind": "DWord" },
+    { "name": "Mostrar porcentagem da bateria", "description": "Habilita porcentagem da bateria quando suportado pelo Windows.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "property": "ShowBatteryPercentage", "value": 1, "valueKind": "DWord" }
   ],
-  "Planned": [
-    {
-      "name": "RestorePoint",
-      "description": "Criar ponto de restauracao antes de tweaks sensiveis.",
-      "scope": "System",
-      "safe": false,
-      "type": "planned"
-    }
+  "Privacidade": [
+    { "name": "Desativar ID de publicidade", "description": "Desativa o ID de publicidade do Windows para o usuario atual.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "property": "Enabled", "value": 0, "valueKind": "DWord" },
+    { "name": "Desativar historico de atividades", "description": "Impede que o Windows publique atividades na linha do tempo do usuario.", "scope": "HKLM", "safe": true, "type": "registry", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "property": "PublishUserActivities", "value": 0, "valueKind": "DWord" },
+    { "name": "Desativar consumidor Microsoft", "description": "Reduz instalacoes e sugestoes promocionais do Windows.", "scope": "HKLM", "safe": true, "type": "registry", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent", "property": "DisableWindowsConsumerFeatures", "value": 1, "valueKind": "DWord" }
+  ],
+  "Sistema": [
+    { "name": "Ativar caminhos longos", "description": "Permite caminhos de arquivo com mais de 260 caracteres.", "scope": "HKLM", "safe": true, "type": "registry", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem", "property": "LongPathsEnabled", "value": 1, "valueKind": "DWord" },
+    { "name": "Ativar mensagens detalhadas de logon", "description": "Mostra mensagens detalhadas durante logon, desligamento e reinicializacao.", "scope": "HKLM", "safe": true, "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "property": "VerboseStatus", "value": 1, "valueKind": "DWord" },
+    { "name": "Desativar teclas de aderencia", "description": "Evita pop-up das teclas de aderencia ao pressionar Shift repetidamente.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys", "property": "Flags", "value": "506", "valueKind": "String" },
+    { "name": "Ativar Num Lock na inicializacao", "description": "Liga o Num Lock para o usuario atual na inicializacao.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Control Panel\\Keyboard", "property": "InitialKeyboardIndicators", "value": "2", "valueKind": "String" },
+    { "name": "Desativar economia agressiva de rede", "description": "Evita desconectividade de rede durante modo de espera em alguns equipamentos.", "scope": "HKLM", "safe": true, "type": "registry", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "property": "CsEnabled", "value": 0, "valueKind": "DWord" }
+  ],
+  "Aparencia": [
+    { "name": "Tema escuro para aplicativos", "description": "Ativa tema escuro para aplicativos do Windows.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "property": "AppsUseLightTheme", "value": 0, "valueKind": "DWord" },
+    { "name": "Tema escuro do sistema", "description": "Ativa tema escuro para areas do sistema.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "property": "SystemUsesLightTheme", "value": 0, "valueKind": "DWord" },
+    { "name": "Desativar transparencia", "description": "Reduz efeitos de transparencia para melhorar nitidez e desempenho.", "scope": "HKCU", "safe": true, "type": "registry", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "property": "EnableTransparency", "value": 0, "valueKind": "DWord" }
+  ],
+  "Avancado - exige revisao": [
+    { "name": "Remover OneDrive", "description": "Planejado: remocao do OneDrive exige confirmacao dedicada.", "scope": "Sistema", "safe": false, "type": "planned" },
+    { "name": "Remover Microsoft Edge", "description": "Planejado: remocao do Edge exige confirmacao dedicada e tratamento por versao.", "scope": "Sistema", "safe": false, "type": "planned" },
+    { "name": "Remover AppX selecionados", "description": "Planejado: tela dedicada para remover aplicativos provisionados.", "scope": "Sistema", "safe": false, "type": "planned" },
+    { "name": "Criar ponto de restauracao", "description": "Planejado: criar ponto de restauracao antes de ajustes sensiveis.", "scope": "Sistema", "safe": false, "type": "planned" },
+    { "name": "Windows 11 Creator", "description": "Planejado: criador de ISO/USB inspirado na aba Win11 Creator.", "scope": "Sistema", "safe": false, "type": "planned" }
   ]
 }
