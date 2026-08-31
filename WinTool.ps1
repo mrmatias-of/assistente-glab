@@ -51,9 +51,15 @@ function Invoke-LoggedProcess {
     Write-Log "> $FilePath $($Arguments -join ' ')"
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $FilePath
-    foreach ($argument in $Arguments) {
-        [void]$psi.ArgumentList.Add($argument)
+    $escapedArguments = foreach ($argument in $Arguments) {
+        if ($null -eq $argument) { continue }
+        if ($argument -match '[\s"]') {
+            '"' + ($argument -replace '"', '\"') + '"'
+        } else {
+            $argument
+        }
     }
+    $psi.Arguments = $escapedArguments -join " "
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.UseShellExecute = $false
@@ -64,8 +70,8 @@ function Invoke-LoggedProcess {
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
 
-    if ($stdout.Trim()) { Write-Log $stdout.Trim() }
-    if ($stderr.Trim()) { Write-Log $stderr.Trim() }
+    if ($stdout -and $stdout.Trim()) { Write-Log $stdout.Trim() }
+    if ($stderr -and $stderr.Trim()) { Write-Log $stderr.Trim() }
     Write-Log "Exit code: $($process.ExitCode)"
     return $process.ExitCode
 }
